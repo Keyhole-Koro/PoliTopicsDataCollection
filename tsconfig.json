@@ -1,0 +1,31 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2020",                  // Modern JavaScript target
+    "module": "CommonJS",                  // Use ES modules
+    "strict": true,                      // Enable strict type checking
+    "esModuleInterop": true,             // Allow default imports from CommonJS
+    "skipLibCheck": true,                // Skip library checks to speed up compilation
+    "forceConsistentCasingInFileNames": true,  // Enforce consistent casing for file names
+    "outDir": "./dist",                  // Output compiled JS to dist
+    "moduleResolution": "node",          // Resolve modules like Node.js does
+    "resolveJsonModule": true,           // Allow importing JSON files
+    "allowJs": false,                     // Only compile TypeScript files
+
+    "baseUrl": "./src",                    // Base URL for module resolution
+    "paths": {         // Optional: For aliasing paths (e.g., "@/components")
+      "@interfaces/*": ["interfaces/*"],
+      "@DynamoDBHandler/*": ["DynamoDBHandler/*"],
+      "@LLMSummarize/*": ["LLMSummarize/*"],
+      "@NationalDietAPI/*": ["NationalDietAPI/*"],
+      "@NationalDietAPIHandler/*": ["NationalDietAPIHandler/*"],
+      "@llm/*": ["llm/*"],
+      "@services/*": ["services/*"],
+      "@S3/*": ["S3/*"],
+      "@SQS/*": ["SQS/*"],
+      "@prompts/*": ["prompts/*"],
+      "@utils/*": ["utils/*"]
+    },
+  },
+  "include": ["src/**/*", "tests"],               // Include all TypeScript files in the src folder
+  "exclude": ["node_modules"]            // Exclude node_modules
+}

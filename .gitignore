@@ -1,0 +1,21 @@
+.env
+.env.tmpl
+
+node_modules
+__snapshots__
+
+*.zip
+dist
+
+.aws-sam
+data
+
+layers
+
+src/**/*.json
+
+.terraform
+.terraform.lock.hcl
+
+# contains logs instead of s3 in local development
+out

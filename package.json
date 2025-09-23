@@ -1,0 +1,42 @@
+{
+  "name": "politopics",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "jest",
+    "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
+    "local:test:e2e": "npx ts-node -r tsconfig-paths/register scripts/local-e2e.ts",
+    "build": "tsc && node scripts/copy-node-modules.js",
+    "build:sam": "npm run build && sam build",
+    "postbuild": "tsc-alias",
+    "local:up": "docker compose up -d localstack dynamodb-admin",
+    "local:down": "docker compose down"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "Politopics: AWS Lambda + DynamoDB (LocalStack support) with LLM summarization pipeline.",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
+    "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.21",
+    "@types/node-fetch": "^2.6.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.4",
+    "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
+    "tsconfig-paths": "^4.2.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.817.0",
+    "@aws-sdk/client-s3": "^3.864.0",
+    "@aws-sdk/client-sqs": "^3.864.0",
+    "@aws-sdk/lib-dynamodb": "^3.817.0",
+    "@google/generative-ai": "^0.24.1",
+    "aws-lambda": "^1.0.7",
+    "dotenv": "^16.5.0",
+    "fs-extra": "^11.3.0",
+    "node-fetch": "^2.7.0"
+  }
+}

@@ -1,0 +1,47 @@
+﻿{
+  "name": "PoliTopics DevContainer",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "runArgs": [
+    "--init",
+    "--privileged"
+  ],
+  "containerEnv": {
+    "AWS_PAGER": "",
+    "NODE_ENV": "development"
+  },
+  "remoteEnv": {
+    "AWS_REGION": "ap-northeast-3"
+  },
+  "forwardPorts": [
+    4566,
+    8001
+  ],
+  "portsAttributes": {
+    "4566": {
+      "label": "LocalStack"
+    },
+    "8001": {
+      "label": "DynamoDB Admin"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "editor.formatOnSave": true,
+        "eslint.format.enable": true
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "AmazonWebServices.aws-toolkit-vscode",
+        "streetsidesoftware.code-spell-checker"
+      ]
+    }
+  }
+}
