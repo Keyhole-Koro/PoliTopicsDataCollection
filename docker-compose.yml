@@ -1,0 +1,16 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    environment:
+      - SERVICES=dynamodb,s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway
+      - DEBUG=0
+      - LS_LOG=warning
+      - AWS_DEFAULT_REGION=ap-northeast-3
+    volumes:
+      - "localstack_data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+volumes:
+  localstack_data:

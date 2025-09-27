@@ -7,14 +7,14 @@ import { S3Client } from "@aws-sdk/client-s3";
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-import { putJsonS3, writeRunLog } from '@S3/s3';
-
 import fetchNationalDietRecords from '@NationalDietAPI/NationalDietAPI';
 import type { RawMeetingData, RawSpeechRecord } from '@NationalDietAPI/Raw';
 import { enqueuePromptsWithS3Batch, type PromptTaskMessage } from '@SQS/sqs';
+import { putJsonS3, writeRunLog } from '@S3/s3';
 
-import { getAwsRegion } from '@utils/aws';
 import { prompt } from '@prompts/prompts';
+import { getAwsRegion } from '@utils/aws';
+
 import { isHttpApiEvent, lowercaseHeaders } from '@utils/http';
 import { defaultCronRange, deriveRangeFromHttp, deriveRangeFromSqsRecord, type RunRange } from '@utils/range';
 import { buildOrderLenByTokens, IndexPack, packIndexSets, type OrderLen } from '@utils/packing';
@@ -22,8 +22,8 @@ import { buildOrderLenByTokens, IndexPack, packIndexSets, type OrderLen } from '
 if (!process.env.GEMINI_MAX_INPUT_TOKEN) {
   throw new Error("GEMINI_MAX_INPUT_TOKEN is not set");
 }
-if (!process.env.GOOGLE_API_KEY) {
-  throw new Error("GOOGLE_API_KEY is not set");
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY is not set");
 }
 
 const prompt_bucket = "politopics-prompts";
@@ -36,7 +36,7 @@ const s3 = new S3Client({ region: getAwsRegion(), ...(endpoint ? { endpoint } : 
 const national_diet_api_endpoint = process.env.NATIONAL_DIET_API_ENDPOINT || "https://kokkai.ndl.go.jp/api/meeting";
 
 const GEMINI_MAX_INPUT_TOKEN: number = Number(process.env.GEMINI_MAX_INPUT_TOKEN);
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
 async function countTokens(text: string): Promise<number> {
@@ -60,6 +60,7 @@ const composeSpeechesFromIndices = (speeches: RawSpeechRecord[], indices: number
 export const handler: Handler = async (event: APIGatewayProxyEventV2 | ScheduledEvent) => {
   var rr: RunRange | null;
 
+  // extract run range from event
   if (isHttpApiEvent(event)) {
     console.log(`[HTTP ${event.requestContext.http.method} ${event.requestContext.http.path}`);
     const headers = lowercaseHeaders(event.headers);
@@ -74,6 +75,18 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
     if (rr.from > rr.until) return resJson(400, { error: 'from must be <= until' });
   } else if (event.source === 'aws.events') {
     rr = defaultCronRange(); // yesterday
+  } else if (event.source === 'local.events') {
+    const fromDate = process.env.FROM_DATE;
+    const untilDate = process.env.UNTIL_DATE;
+    
+    if (!fromDate || !untilDate) {
+      throw new Error("FROM_DATE and UNTIL_DATE must be set for local events");
+    }
+    
+    rr = {
+      from: fromDate,
+      until: untilDate
+    };
   } else {
     return resJson(400, { error: 'invalid_range', message: 'Could not determine run range.' });
   }
@@ -87,9 +100,14 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
       }
     );
 
-    for (const record of rawMeetingData.meetingRecords) {
-      const issueID = record.issueID;
-      const speeches = record.speechRecord ?? [];
+    if (rawMeetingData.numberOfRecords && rawMeetingData.numberOfRecords == 0) {
+      console.log(`No meetings found for range ${rr.from} to ${rr.until}`);
+      return resJson(200, { message: 'No meetings found for the specified range.' });
+    }
+
+    for (const meeting of rawMeetingData.meetingRecord) {
+      const issueID = meeting.issueID;
+      const speeches = meeting.speechRecord ?? [];
 
       const orderLens: OrderLen[] = await buildOrderLenByTokens({
         speeches,
@@ -101,6 +119,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
       const packed: IndexPack[] = packIndexSets(orderLens, availableTokens);
 
       const items: PromptTaskMessage[] = [];
+      var s3urls: string[] = [];
 
       for (const p of packed) {
         const chunkSpeeches = composeSpeechesFromIndices(speeches, p.indices);
@@ -123,8 +142,10 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
           continue;
         }
 
+        s3urls.push(`s3://${prompt_bucket}/${s3key}`);
+
         items.push({
-          type: 'prompt',
+          type: 'chunk',
           url: `s3://${prompt_bucket}/${s3key}`,
           llm: 'gemini',
           llmModel: 'gemini-2.5-pro',
@@ -132,6 +153,22 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
             speech_ids: p.speech_ids,
             totalLen: p.totalLen,
             indices: p.indices,
+            range: rr,
+            runId: '', // to be filled later
+            startedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      if (s3urls.length) {
+        items.push({
+          type: 'reduce',
+          urls: s3urls,
+          llm: 'gemini',
+          llmModel: 'gemini-2.5-pro',
+          meta: {
+            issueID,
+            numChunks: packed.length,
             range: rr,
             runId: '', // to be filled later
             startedAt: new Date().toISOString(),

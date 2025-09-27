@@ -3,7 +3,7 @@
   numberOfReturn: number;
   startRecord: number;
   nextRecordPosition: number;
-  meetingRecords: RawMeetingRecord[];
+  meetingRecord: RawMeetingRecord[];
 }
 
 export interface RawMeetingRecord {

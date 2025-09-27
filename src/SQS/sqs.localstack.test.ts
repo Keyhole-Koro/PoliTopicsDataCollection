@@ -20,7 +20,7 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
 
   beforeAll(async () => {
     process.env = { ...ORIGINAL_ENV };
-    process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+    process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
     process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
 
     sqs = new SQSClient({ region: process.env.AWS_REGION, endpoint: LOCALSTACK_ENDPOINT });
@@ -57,27 +57,26 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
 
     const items: PromptTaskMessage[] = [
       {
-        type: 'prompt',
+        type: 'chunk',
         url: 's3://politopics-prompts/a.json',
         llm: 'gemini',
         llmModel: 'gemini-2.5-pro',
         meta: { chunk: 1 },
       },
       {
-        type: 'prompt',
+        type: 'chunk',
         url: 's3://politopics-prompts/b.json',
         llm: 'gemini',
         llmModel: 'gemini-2.5-pro',
         meta: { chunk: 2 },
-        delayMs: 4500,
       },
     ];
 
     const result = await enqueuePromptsWithS3Batch({ items, queueUrl });
     expect(result.queued).toBe(items.length);
 
-    const received: Array<{ body: any; receiptHandle: string }> = [];
-    for (let attempt = 0; attempt < 5 && received.length < items.length; attempt += 1) {
+    const received = new Map<string, { body: any; receiptHandle: string }>();
+    for (let attempt = 0; attempt < 8 && received.size < items.length; attempt += 1) {
       const res = await sqs.send(new ReceiveMessageCommand({
         QueueUrl: queueUrl,
         MaxNumberOfMessages: 10,
@@ -86,27 +85,33 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
       }));
 
       for (const message of res.Messages || []) {
-        if (message.Body && message.ReceiptHandle) {
+        if (message.Body && message.ReceiptHandle && message.MessageId) {
+          if (received.has(message.MessageId)) {
+            continue;
+          }
           console.log('[LocalStack SQS] message body:', message.Body);
-          received.push({ body: JSON.parse(message.Body), receiptHandle: message.ReceiptHandle });
+          received.set(message.MessageId, {
+            body: JSON.parse(message.Body),
+            receiptHandle: message.ReceiptHandle,
+          });
         }
       }
     }
 
-    expect(received).toHaveLength(items.length);
+    expect(received.size).toBe(items.length);
 
-    const bodies = received.map((entry) => entry.body);
+    const bodies = Array.from(received.values()).map((entry) => entry.body);
     expect(bodies).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'prompt',
+          type: 'chunk',
           url: 's3://politopics-prompts/a.json',
           llm: 'gemini',
           llmModel: 'gemini-2.5-pro',
           meta: expect.objectContaining({ chunk: 1 }),
         }),
         expect.objectContaining({
-          type: 'prompt',
+          type: 'chunk',
           url: 's3://politopics-prompts/b.json',
           llm: 'gemini',
           llmModel: 'gemini-2.5-pro',
@@ -115,7 +120,7 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
       ]),
     );
 
-    const deletes = received.map((entry, index) => ({
+    const deletes = Array.from(received.values()).map((entry, index) => ({
       Id: `d${index}`,
       ReceiptHandle: entry.receiptHandle,
     }));

@@ -1,0 +1,3 @@
+bucket = "your-terraform-state-bucket"
+key    = "politopics-data-collection/stage.tfstate"
+region = "ap-northeast-3"

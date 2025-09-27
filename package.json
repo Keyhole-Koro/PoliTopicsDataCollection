@@ -1,21 +1,19 @@
 {
-  "name": "politopics",
+  "name": "politopics-data-collection",
   "version": "1.0.0",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
     "test": "jest",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
-    "local:test:e2e": "npx ts-node -r tsconfig-paths/register scripts/local-e2e.ts",
+    "local:bootstrap": "npx ts-node -r tsconfig-paths/register scripts/localBootstrap.ts",
     "build": "tsc && node scripts/copy-node-modules.js",
-    "build:sam": "npm run build && sam build",
     "postbuild": "tsc-alias",
-    "local:up": "docker compose up -d localstack dynamodb-admin",
+    "local:up": "docker compose up -d localstack",
     "local:down": "docker compose down"
   },
   "author": "",
   "license": "ISC",
-  "description": "Politopics: AWS Lambda + DynamoDB (LocalStack support) with LLM summarization pipeline.",
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
     "@types/fs-extra": "^11.0.4",

@@ -1,4 +1,4 @@
-﻿{
+{
   "compilerOptions": {
     "target": "ES2020",                  // Modern JavaScript target
     "module": "CommonJS",                  // Use ES modules
@@ -26,6 +26,6 @@
       "@utils/*": ["utils/*"]
     },
   },
-  "include": ["src/**/*", "tests"],               // Include all TypeScript files in the src folder
+  "include": ["src/**/*", "scripts/**/*.ts", "tests"],               // Include all TypeScript files in the src folder
   "exclude": ["node_modules"]            // Exclude node_modules
 }
