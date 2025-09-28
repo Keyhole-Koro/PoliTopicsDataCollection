@@ -19,6 +19,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.STAGE_ROLE_TO_ASSUME }}
@@ -54,6 +64,16 @@ jobs:
         {"RUN_API_KEY":"${{ secrets.PROD_RUN_API_KEY }}","GEMINI_API_KEY":"${{ secrets.PROD_GEMINI_API_KEY }}"}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
