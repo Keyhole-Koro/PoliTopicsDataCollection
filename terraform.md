@@ -17,7 +17,7 @@ Stage and production tfvars files already provide the non-sensitive defaults (e.
 ## Stage Deployment
 ```bash
 cd terraform
-terraform init -backend-config=backends/stage.tfbackend
+terraform init -backend-config backends/stage.tfbackend
 terraform plan  -var-file=tfvars/stage.tfvars
 terraform apply -var-file=tfvars/stage.tfvars
 ```
@@ -25,7 +25,7 @@ terraform apply -var-file=tfvars/stage.tfvars
 ## Production Deployment
 ```bash
 cd terraform
-terraform init -backend-config=backends/production.tfbackend
+terraform init -backend-config backends/production.tfbackend
 terraform plan  -var-file=tfvars/production.tfvars
 terraform apply -var-file=tfvars/production.tfvars
 ```

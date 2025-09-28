@@ -1,4 +1,4 @@
-﻿variable "environment" {
+variable "environment" {
   type = string
 }
 
@@ -35,21 +35,6 @@ variable "lambda_timeout_sec" {
   type = number
 }
 
-variable "vpc_id" {
-  type    = string
-  default = null
-}
-
-variable "private_subnet_ids" {
-  type    = list(string)
-  default = []
-}
-
-variable "security_group_ids" {
-  type    = list(string)
-  default = []
-}
-
 variable "environment_variables" {
   type    = map(string)
   default = {}
@@ -58,6 +43,11 @@ variable "environment_variables" {
 variable "secret_environment_variables" {
   type    = map(string)
   default = {}
+}
+
+variable "schedule_expression" {
+  type    = string
+  default = "cron(0 16 * * ? *)"
 }
 
 variable "tags" {

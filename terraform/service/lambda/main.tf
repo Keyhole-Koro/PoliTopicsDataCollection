@@ -33,7 +33,7 @@ variable "prompt_bucket" {
 }
 
 variable "error_bucket" {
-  type = string
+  type    = string
   default = null
 }
 
@@ -45,19 +45,9 @@ variable "prompt_queue_url" {
   type = string
 }
 
-variable "vpc_id" {
+variable "schedule_expression" {
   type    = string
-  default = null
-}
-
-variable "private_subnet_ids" {
-  type    = list(string)
-  default = []
-}
-
-variable "security_group_ids" {
-  type    = list(string)
-  default = []
+  default = "cron(0 16 * * ? *)"
 }
 
 variable "tags" {
@@ -87,11 +77,6 @@ resource "aws_iam_role_policy_attachment" "basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy_attachment" "sqs_execution" {
-  role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
-}
-
 locals {
   env_vars = merge(
     {
@@ -101,7 +86,7 @@ locals {
       PROMPT_QUEUE_ARN = var.prompt_queue_arn
     },
     var.environment_variables,
-    var.secret_environment_variables
+    var.secret_environment_variables,
   )
 }
 
@@ -109,7 +94,7 @@ resource "aws_lambda_function" "this" {
   function_name = "${var.name_prefix}-fn"
   role          = aws_iam_role.lambda.arn
   handler       = "dist/lambda_handler.handler"
-  runtime       = "nodejs22.x"
+  runtime       = "nodejs20.x"
   s3_bucket     = var.lambda_package_bucket
   s3_key        = var.lambda_package_key
   memory_size   = var.memory_mb
@@ -119,24 +104,28 @@ resource "aws_lambda_function" "this" {
     variables = local.env_vars
   }
 
-  dynamic "vpc_config" {
-    for_each = var.vpc_id != null && length(var.private_subnet_ids) > 0 ? [true] : []
-    content {
-      subnet_ids         = var.private_subnet_ids
-      security_group_ids = var.security_group_ids
-    }
-  }
-
   tags = var.tags
 }
 
-resource "aws_lambda_event_source_mapping" "sqs_trigger" {
-  event_source_arn = var.prompt_queue_arn
-  function_name    = aws_lambda_function.this.arn
-  batch_size       = 10
+resource "aws_cloudwatch_event_rule" "schedule" {
+  name                = "${var.name_prefix}-schedule"
+  schedule_expression = var.schedule_expression
+}
+
+resource "aws_cloudwatch_event_target" "schedule" {
+  rule      = aws_cloudwatch_event_rule.schedule.name
+  target_id = "${var.name_prefix}-lambda"
+  arn       = aws_lambda_function.this.arn
+}
+
+resource "aws_lambda_permission" "allow_events" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.this.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.schedule.arn
 }
 
 output "function_name" {
   value = aws_lambda_function.this.function_name
 }
-

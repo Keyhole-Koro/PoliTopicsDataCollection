@@ -1,4 +1,4 @@
-﻿variable "aws_region" {
+variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
 }
@@ -57,24 +57,6 @@ variable "lambda_timeout_sec" {
   default     = 300
 }
 
-variable "vpc_id" {
-  description = "VPC identifier for Lambda networking"
-  type        = string
-  default     = null
-}
-
-variable "private_subnet_ids" {
-  description = "Private subnet IDs for Lambda ENIs"
-  type        = list(string)
-  default     = []
-}
-
-variable "security_group_ids" {
-  description = "Security groups for Lambda ENIs"
-  type        = list(string)
-  default     = []
-}
-
 variable "environment_variables" {
   description = "Non-sensitive environment variables for the Lambda function"
   type        = map(string)
@@ -86,9 +68,15 @@ variable "secret_environment_variables" {
   type        = map(string)
   default     = {}
 }
+variable "schedule_expression" {
+  description = "EventBridge schedule expression (cron or rate)"
+  type        = string
+  default     = "cron(0 16 * * ? *)"
+}
 
 variable "tags" {
   description = "Common resource tags"
   type        = map(string)
   default     = {}
 }
+
