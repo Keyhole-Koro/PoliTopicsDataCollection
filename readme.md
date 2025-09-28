@@ -1,6 +1,6 @@
-# PoliTopics-C
+# PoliTopics-Data-Collection
 
-Politopics-C is a serverless data pipeline that downloads Japanese National Diet records, breaks them into LLM-friendly prompt chunks, stores the payloads in S3, and pushes fan-out jobs through SQS while tracking aggregation state in DynamoDB. The codebase is written in TypeScript and targets AWS Lambda; Terraform modules define the cloud deployment and LocalStack enables a local-first workflow.
+PoliTopics-Data-Collection is a serverless data pipeline that downloads Japanese National Diet records, breaks them into LLM-friendly prompt chunks, stores the payloads in S3, and pushes fan-out jobs through SQS while tracking aggregation state in DynamoDB. The codebase is written in TypeScript and targets AWS Lambda; Terraform modules define the cloud deployment and LocalStack enables a local-first workflow.
 
 ## Architecture
 

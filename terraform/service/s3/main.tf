@@ -44,7 +44,7 @@ resource "aws_s3_bucket_public_access_block" "prompt" {
 }
 
 locals {
-  create_error_bucket = var.error_bucket_name != null && trim(var.error_bucket_name) != ""
+  create_error_bucket = var.error_bucket_name != null && trimspace(var.error_bucket_name) != ""
 }
 
 resource "aws_s3_bucket" "error" {
@@ -70,3 +70,4 @@ output "prompt_bucket" {
 output "error_bucket" {
   value = local.create_error_bucket ? aws_s3_bucket.error[0].bucket : null
 }
+

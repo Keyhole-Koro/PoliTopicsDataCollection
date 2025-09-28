@@ -32,12 +32,11 @@ module "lambda" {
   source = "./lambda"
 
   name_prefix                  = local.name_prefix
-  lambda_package_bucket        = var.lambda_package_bucket
-  lambda_package_key           = var.lambda_package_key
   memory_mb                    = var.lambda_memory_mb
   timeout_sec                  = var.lambda_timeout_sec
   environment_variables        = var.environment_variables
   secret_environment_variables = var.secret_environment_variables
+  api_route_key               = var.api_route_key
   prompt_bucket                = module.buckets.prompt_bucket
   error_bucket                 = module.buckets.error_bucket
   prompt_queue_arn             = aws_sqs_queue.prompt.arn

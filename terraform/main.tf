@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 
   backend "s3" {}
@@ -24,8 +28,6 @@ module "service" {
   prompt_bucket_name         = var.prompt_bucket_name
   error_bucket_name          = var.error_bucket_name
   prompt_queue_name          = var.prompt_queue_name
-  lambda_package_bucket      = var.lambda_package_bucket
-  lambda_package_key         = var.lambda_package_key
   lambda_memory_mb           = var.lambda_memory_mb
   lambda_timeout_sec         = var.lambda_timeout_sec
   environment_variables      = var.environment_variables
@@ -33,3 +35,4 @@ module "service" {
   schedule_expression        = var.schedule_expression
   tags                       = var.tags
 }
+

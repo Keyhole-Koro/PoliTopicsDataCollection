@@ -35,15 +35,7 @@ variable "prompt_queue_name" {
   type        = string
 }
 
-variable "lambda_package_bucket" {
-  description = "S3 bucket holding the Lambda deployment package"
-  type        = string
-}
 
-variable "lambda_package_key" {
-  description = "S3 key of the Lambda deployment package"
-  type        = string
-}
 
 variable "lambda_memory_mb" {
   description = "Lambda memory size in MB"
@@ -78,5 +70,13 @@ variable "tags" {
   description = "Common resource tags"
   type        = map(string)
   default     = {}
+}
+
+
+
+variable "api_route_key" {
+  description = "HTTP API route key (e.g. POST /run)"
+  type        = string
+  default     = "POST /run"
 }
 

@@ -7,7 +7,7 @@
     "test": "jest",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
     "local:bootstrap": "npx ts-node -r tsconfig-paths/register scripts/localBootstrap.ts",
-    "build": "tsc && node scripts/copy-node-modules.js",
+    "build": "node scripts/package-lambda.js",
     "postbuild": "tsc-alias",
     "local:up": "docker compose up -d localstack",
     "local:down": "docker compose down"
@@ -38,3 +38,5 @@
     "node-fetch": "^2.7.0"
   }
 }
+
+

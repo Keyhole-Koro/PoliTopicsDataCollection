@@ -19,13 +19,7 @@ variable "prompt_queue_name" {
   type = string
 }
 
-variable "lambda_package_bucket" {
-  type = string
-}
 
-variable "lambda_package_key" {
-  type = string
-}
 
 variable "lambda_memory_mb" {
   type = number
@@ -54,3 +48,10 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+
+variable "api_route_key" {
+  type    = string
+  default = "POST /run"
+}
+

@@ -20,16 +20,53 @@ describe('lambda_handler integration with mocked external APIs', () => {
   test('processes meetings using mocked National Diet and Gemini APIs', async () => {
     const dietResponse: RawMeetingData = {
       numberOfRecords: 1,
-      meetingRecords: [
+      numberOfReturn: 1,
+      startRecord: 1,
+      nextRecordPosition: 0,
+      meetingRecord: [
         {
           issueID: 'MTG-001',
+          imageKind: 'text',
+          searchObject: 0,
+          session: 208,
+          nameOfHouse: 'House of Representatives',
+          nameOfMeeting: 'Budget Committee',
+          issue: 'Budget Deliberations',
+          date: '2024-09-24',
+          closing: null,
           speechRecord: [
-            { speechID: 'sp-1', speech: 'Opening remarks.' },
-            { speechID: 'sp-2', speech: 'Minister response.' },
+            {
+              speechID: 'sp-1',
+              speechOrder: 1,
+              speaker: 'Member A',
+              speakerYomi: null,
+              speakerGroup: null,
+              speakerPosition: null,
+              speakerRole: null,
+              speech: 'Opening remarks.',
+              startPage: 1,
+              createTime: new Date().toISOString(),
+              updateTime: new Date().toISOString(),
+              speechURL: 'https://example.com/sp-1',
+            },
+            {
+              speechID: 'sp-2',
+              speechOrder: 2,
+              speaker: 'Minister B',
+              speakerYomi: null,
+              speakerGroup: null,
+              speakerPosition: null,
+              speakerRole: null,
+              speech: 'Minister response.',
+              startPage: 2,
+              createTime: new Date().toISOString(),
+              updateTime: new Date().toISOString(),
+              speechURL: 'https://example.com/sp-2',
+            },
           ],
-        } as any,
+        },
       ],
-    } as RawMeetingData;
+    };
 
     const mockApi = await startMockNationalDietApi(dietResponse);
 

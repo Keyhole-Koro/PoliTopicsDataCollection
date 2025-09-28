@@ -2,14 +2,6 @@ variable "name_prefix" {
   type = string
 }
 
-variable "lambda_package_bucket" {
-  type = string
-}
-
-variable "lambda_package_key" {
-  type = string
-}
-
 variable "memory_mb" {
   type = number
 }
@@ -50,6 +42,11 @@ variable "schedule_expression" {
   default = "cron(0 16 * * ? *)"
 }
 
+variable "api_route_key" {
+  type    = string
+  default = "POST /run"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
@@ -67,7 +64,7 @@ data "aws_iam_policy_document" "lambda_assume" {
 }
 
 resource "aws_iam_role" "lambda" {
-  name               = "${var.name_prefix}-lambda-role"
+  name               = "${var.name_prefix}-data-collection-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
   tags               = var.tags
 }
@@ -75,6 +72,11 @@ resource "aws_iam_role" "lambda" {
 resource "aws_iam_role_policy_attachment" "basic_execution" {
   role       = aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "sqs_execution" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
 }
 
 locals {
@@ -90,13 +92,24 @@ locals {
   )
 }
 
+locals {
+  package_source_dir = "${path.root}/../dist"
+  package_output_zip = "${path.module}/.build/${var.name_prefix}.zip"
+}
+
+data "archive_file" "lambda" {
+  type        = "zip"
+  source_dir  = local.package_source_dir
+  output_path = local.package_output_zip
+}
+
 resource "aws_lambda_function" "this" {
-  function_name = "${var.name_prefix}-fn"
+  function_name = "${var.name_prefix}-data-collection-fn"
   role          = aws_iam_role.lambda.arn
-  handler       = "dist/lambda_handler.handler"
+  handler       = "lambda_handler.handler"
   runtime       = "nodejs20.x"
-  s3_bucket     = var.lambda_package_bucket
-  s3_key        = var.lambda_package_key
+  filename      = data.archive_file.lambda.output_path
+  source_code_hash = data.archive_file.lambda.output_base64sha256
   memory_size   = var.memory_mb
   timeout       = var.timeout_sec
 
@@ -108,8 +121,9 @@ resource "aws_lambda_function" "this" {
 }
 
 resource "aws_cloudwatch_event_rule" "schedule" {
-  name                = "${var.name_prefix}-schedule"
+  name                = "${var.name_prefix}-data-collection-schedule"
   schedule_expression = var.schedule_expression
+  tags                = var.tags
 }
 
 resource "aws_cloudwatch_event_target" "schedule" {
@@ -126,6 +140,47 @@ resource "aws_lambda_permission" "allow_events" {
   source_arn    = aws_cloudwatch_event_rule.schedule.arn
 }
 
+resource "aws_apigatewayv2_api" "http" {
+  name          = "${var.name_prefix}-http"
+  protocol_type = "HTTP"
+  tags          = var.tags
+}
+
+resource "aws_apigatewayv2_integration" "lambda" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_method     = "POST"
+  integration_uri        = aws_lambda_function.this.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "lambda" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = var.api_route_key
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.http.id
+  name        = "$default"
+  auto_deploy = true
+  tags        = var.tags
+}
+
+resource "aws_lambda_permission" "allow_http_api" {
+  statement_id  = "AllowHttpApiInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.this.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
 output "function_name" {
   value = aws_lambda_function.this.function_name
 }
+
+output "http_api_endpoint" {
+  value = aws_apigatewayv2_stage.default.invoke_url
+}
+
+

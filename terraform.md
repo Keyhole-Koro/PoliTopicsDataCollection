@@ -14,20 +14,29 @@ export TF_VAR_secret_environment_variables='{"RUN_API_KEY":"<run-key>","GEMINI_A
 
 Stage and production tfvars files already provide the non-sensitive defaults (e.g., `GEMINI_MAX_INPUT_TOKEN`). Add additional keys to the JSON blob as needed.
 
+## Build Lambda Artifact
+
+Run this once before planning/applying so Terraform can package the local build:
+
+```bash
+npm install
+npm run build
+```
+
 ## Stage Deployment
 ```bash
 cd terraform
 terraform init -backend-config backends/stage.tfbackend
-terraform plan  -var-file=tfvars/stage.tfvars
-terraform apply -var-file=tfvars/stage.tfvars
+terraform plan  -var-file tfvars/stage.tfvars
+terraform apply -var-file tfvars/stage.tfvars
 ```
 
 ## Production Deployment
 ```bash
 cd terraform
 terraform init -backend-config backends/production.tfbackend
-terraform plan  -var-file=tfvars/production.tfvars
-terraform apply -var-file=tfvars/production.tfvars
+terraform plan  -var-file tfvars/production.tfvars
+terraform apply -var-file tfvars/production.tfvars
 ```
 
 Remember to unset the secret export afterwards if you are on a shared shell:
@@ -46,4 +55,5 @@ The workflow in `.github/workflows/deploy.yml` automatically runs `terraform ini
 - `STAGE_GEMINI_API_KEY`, `PROD_GEMINI_API_KEY`
 
 The workflow sets `TF_VAR_secret_environment_variables` from those secrets so the API keys never appear in the repository.
+
 

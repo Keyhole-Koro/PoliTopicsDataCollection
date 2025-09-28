@@ -2,58 +2,81 @@
 
 on:
   push:
-    branches:
-      - stage
-      - prod
+    branches: [ stage, prod ]
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
   deploy-stage:
-    if: github.ref == "refs/heads/stage"
+    if: github.ref == 'refs/heads/stage'
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ap-northeast-3
-      AWS_ACCESS_KEY_ID: ${{ secrets.STAGE_AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.STAGE_AWS_SECRET_ACCESS_KEY }}
       TF_VAR_secret_environment_variables: >-
         {"RUN_API_KEY":"${{ secrets.STAGE_RUN_API_KEY }}","GEMINI_API_KEY":"${{ secrets.STAGE_GEMINI_API_KEY }}"}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.STAGE_ROLE_TO_ASSUME }}
+          role-session-name: gha-stage
+          aws-region: ap-northeast-3
+
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.8.5
+          terraform_version: 1.12.2
+
       - name: Terraform Init (stage)
         working-directory: terraform
-        run: terraform init -backend-config=backends/stage.tfbackend
+        run: terraform init -reconfigure -backend-config=backends/stage.tfbackend
+
+      - name: Terraform Validate (stage)
+        working-directory: terraform
+        run: terraform validate
+
       - name: Terraform Plan (stage)
         working-directory: terraform
-        run: terraform plan -var-file=tfvars/stage.tfvars
+        run: terraform plan -input=false -no-color -var-file=tfvars/stage.tfvars -out=tfplan
+
       - name: Terraform Apply (stage)
         working-directory: terraform
-        run: terraform apply -auto-approve -var-file=tfvars/stage.tfvars
+        run: terraform apply -input=false -auto-approve tfplan
 
   deploy-prod:
-    if: github.ref == "refs/heads/prod"
+    if: github.ref == 'refs/heads/prod'
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ap-northeast-3
-      AWS_ACCESS_KEY_ID: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
       TF_VAR_secret_environment_variables: >-
         {"RUN_API_KEY":"${{ secrets.PROD_RUN_API_KEY }}","GEMINI_API_KEY":"${{ secrets.PROD_GEMINI_API_KEY }}"}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PROD_ROLE_TO_ASSUME }}
+          role-session-name: gha-prod
+          aws-region: ap-northeast-3
+
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.8.5
+          terraform_version: 1.12.2
+
       - name: Terraform Init (prod)
         working-directory: terraform
-        run: terraform init -backend-config=backends/production.tfbackend
+        run: terraform init -reconfigure -backend-config=backends/production.tfbackend
+
+      - name: Terraform Validate (prod)
+        working-directory: terraform
+        run: terraform validate
+
       - name: Terraform Plan (prod)
         working-directory: terraform
-        run: terraform plan -var-file=tfvars/production.tfvars
+        run: terraform plan -input=false -no-color -var-file=tfvars/production.tfvars -out=tfplan
+
       - name: Terraform Apply (prod)
         working-directory: terraform
-        run: terraform apply -auto-approve -var-file=tfvars/production.tfvars
+        run: terraform apply -input=false -auto-approve tfplan
