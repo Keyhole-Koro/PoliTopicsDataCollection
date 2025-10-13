@@ -2,99 +2,165 @@ import { SQSClient, SendMessageBatchCommand } from '@aws-sdk/client-sqs';
 
 import { getAwsClientConfig } from '@utils/aws';
 
-export type ChunkPromptTaskMessage = {
-  type: 'chunk';
-  url: string; // s3://bucket/key
+const MAX_SQS_DELAY_SECONDS = 900;
+
+export type BasePromptTaskMessage = {
   meta?: Record<string, any>;
   llm: string;
   llmModel: string;
   delayMs?: number;
+  retryAttempts?: number;
 };
 
-export type ReducePromptTaskMessage = {
+export type MapPromptTaskMessage = BasePromptTaskMessage & {
+  type: 'map';
+  url: string; // s3://bucket/key payload
+  result_url?: string; // optional s3://bucket/key for LLM output
+};
+
+export type ReducePromptTaskMessage = BasePromptTaskMessage & {
   type: 'reduce';
-  urls: string[]; // s3://bucket/key list for reducer
-  meta?: Record<string, any>;
-  llm: string;
-  llmModel: string;
-  delayMs?: number;
-};
-
-export type PromptTaskMessage = ChunkPromptTaskMessage | ReducePromptTaskMessage;
-
-type NormalisedItem = {
-  urlsForSummary: string[];
-  delaySeconds?: number;
-  body: {
-    type: PromptTaskMessage['type'];
-    url?: string;
-    urls?: string[];
-    meta?: Record<string, any>;
-    llm: string;
-    llmModel: string;
+  chunk_result_urls: string[]; // s3://bucket/key list produced by chunk stage
+  prompt: string;
+  issueID: string;
+  meeting: {
+    issueID: string;
+    nameOfMeeting: string;
+    nameOfHouse: string;
+    date: string;
+    numberOfSpeeches: number;
   };
 };
+
+export type PromptTaskMessage = MapPromptTaskMessage | ReducePromptTaskMessage;
+
+type MapQueuePayload = {
+  type: 'map';
+  url: string;
+  result_url?: string;
+  meta?: Record<string, any>;
+  llm: string;
+  llmModel: string;
+  retryAttempts: number;
+};
+
+type ReduceQueuePayload = {
+  type: 'reduce';
+  chunk_result_urls: string[];
+  prompt: string;
+  issueID: string;
+  meeting: ReducePromptTaskMessage['meeting'];
+  meta?: Record<string, any>;
+  llm: string;
+  llmModel: string;
+  retryAttempts: number;
+};
+
+type NormalisedItem = {
+  delaySeconds?: number;
+  body: MapQueuePayload | ReduceQueuePayload;
+};
+
+const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+function ensureRetryAttempts(value: unknown): number {
+  if (value === undefined) return 0;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error('retryAttempts, when provided, must be a finite number >= 0');
+  }
+  return Math.floor(value);
+}
+
+function normaliseDelaySeconds(delayMs: number | undefined): number | undefined {
+  if (delayMs === undefined) return undefined;
+  if (typeof delayMs !== 'number' || !Number.isFinite(delayMs) || delayMs < 0) {
+    throw new Error('delayMs, when provided, must be a finite number >= 0');
+  }
+  const seconds = Math.ceil(delayMs / 1000);
+  if (seconds <= 0) return undefined;
+  return Math.min(MAX_SQS_DELAY_SECONDS, seconds);
+}
 
 function normalisePromptItem(item: PromptTaskMessage, index: number): NormalisedItem {
   if (!item || typeof item !== 'object') {
     throw new Error(`item at index ${index} must be an object`);
   }
 
-  const llm = typeof item.llm === 'string' ? item.llm.trim() : '';
-  const llmModel = typeof item.llmModel === 'string' ? item.llmModel.trim() : '';
-
+  const llm = trimString(item.llm);
+  const llmModel = trimString(item.llmModel);
   if (!llm) throw new Error('llm must be a non-empty string');
   if (!llmModel) throw new Error('llmModel must be a non-empty string');
 
-  if (item.delayMs !== undefined) {
-    if (typeof item.delayMs !== 'number' || !Number.isFinite(item.delayMs) || item.delayMs < 0) {
-      throw new Error('delayMs, when provided, must be a finite number >= 0');
-    }
-  }
+  const retryAttempts = ensureRetryAttempts(item.retryAttempts);
+  const delaySeconds = normaliseDelaySeconds(item.delayMs);
 
-  const delaySeconds = Math.max(0, Math.min(900, Math.ceil((item.delayMs ?? 0) / 1000)));
-
-  if (item.type === 'chunk') {
-    const url = typeof item.url === 'string' ? item.url.trim() : '';
+  if (item.type === 'map') {
+    const url = trimString(item.url);
     if (!url) {
-      throw new Error('chunk tasks require a non-empty url');
+      throw new Error('map tasks require a non-empty url');
+    }
+    const resultUrl = trimString(item.result_url);
+
+    const body: MapQueuePayload = {
+      type: 'map',
+      url,
+      meta: item.meta,
+      llm,
+      llmModel,
+      retryAttempts,
+    };
+    if (resultUrl) {
+      body.result_url = resultUrl;
     }
 
     return {
-      urlsForSummary: [url],
-      delaySeconds: delaySeconds || undefined,
-      body: {
-        type: 'chunk',
-        url,
-        meta: item.meta,
-        llm,
-        llmModel,
-      },
+      delaySeconds,
+      body,
     };
   }
 
   if (item.type === 'reduce') {
-    if (!Array.isArray(item.urls) || !item.urls.length) {
-      throw new Error('reduce tasks require at least one url in urls[]');
+    const prompt = trimString(item.prompt);
+    if (!prompt) {
+      throw new Error('reduce tasks require a non-empty prompt');
     }
-    const trimmedUrls = item.urls
-      .map((candidate) => (typeof candidate === 'string' ? candidate.trim() : ''))
+
+    const issueID = trimString(item.issueID);
+    if (!issueID) {
+      throw new Error('reduce tasks require issueID');
+    }
+
+    if (!Array.isArray(item.chunk_result_urls) || !item.chunk_result_urls.length) {
+      throw new Error('reduce tasks require at least one chunk_result_url');
+    }
+
+    const chunkResultUrls = item.chunk_result_urls
+      .map((candidate) => trimString(candidate))
       .filter((candidate) => candidate.length > 0);
 
-    if (!trimmedUrls.length) {
-      throw new Error('reduce tasks require at least one valid url');
+    if (!chunkResultUrls.length) {
+      throw new Error('reduce tasks require at least one valid chunk_result_url');
     }
 
+    if (!item.meeting || typeof item.meeting !== 'object') {
+      throw new Error('reduce tasks require meeting metadata');
+    }
+
+    const body: ReduceQueuePayload = {
+      type: 'reduce',
+      chunk_result_urls: chunkResultUrls,
+      prompt,
+      issueID,
+      meeting: item.meeting,
+      meta: item.meta,
+      llm,
+      llmModel,
+      retryAttempts,
+    };
+
     return {
-      urlsForSummary: trimmedUrls,
-      delaySeconds: delaySeconds || undefined,
-      body: {
-        type: 'reduce',
-        urls: trimmedUrls,
-        meta: item.meta,
-        llm,
-        llmModel,
-      },
+      delaySeconds,
+      body,
     };
   }
 
@@ -104,23 +170,21 @@ function normalisePromptItem(item: PromptTaskMessage, index: number): Normalised
 export async function enqueuePromptsWithS3Batch(args: {
   items: PromptTaskMessage[];
   queueUrl?: string;        // defaults PROMPT_QUEUE_URL or CHUNK_QUEUE_URL
-}): Promise<{ queued: number; urls: string[] }> {
+}): Promise<{ queued: number }> {
   const queueUrl = args.queueUrl || process.env.PROMPT_QUEUE_URL || process.env.CHUNK_QUEUE_URL;
   if (!queueUrl) {
     console.warn('[PromptQueue] No queue URL configured (PROMPT_QUEUE_URL/CHUNK_QUEUE_URL)');
-    return { queued: 0, urls: [] };
+    return { queued: 0 };
+  }
+
+  if (!args.items.length) {
+    return { queued: 0 };
   }
 
   const cfg = getAwsClientConfig();
   const sqs = new SQSClient(cfg);
 
-  if (!args.items.length) {
-    return { queued: 0, urls: [] };
-  }
-
   const normalised = args.items.map((item, index) => normalisePromptItem(item, index));
-
-  const urls = normalised.flatMap((entry) => entry.urlsForSummary);
 
   const entries: Array<{ Id: string; MessageBody: string; DelaySeconds?: number }> = normalised.map((item, index) => ({
     Id: `m${index}`,
@@ -135,6 +199,7 @@ export async function enqueuePromptsWithS3Batch(args: {
     await sqs.send(new SendMessageBatchCommand({ QueueUrl: queueUrl, Entries: slice }));
     sent += slice.length;
   }
+
   console.log(`[PromptQueue] Enqueued ${sent} prompt(s)`);
-  return { queued: sent, urls };
+  return { queued: sent };
 }

@@ -5,7 +5,7 @@ services:
       - "4566:4566"
       - "4510-4559:4510-4559"
     environment:
-      - SERVICES=dynamodb,s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway
+      - SERVICES=s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway
       - DEBUG=0
       - LS_LOG=warning
       - AWS_DEFAULT_REGION=ap-northeast-3

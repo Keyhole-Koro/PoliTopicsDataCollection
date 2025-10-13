@@ -52,6 +52,16 @@ variable "tags" {
   default = {}
 }
 
+variable "package_source_dir" {
+  type    = string
+  default = null
+}
+
+variable "package_output_path" {
+  type    = string
+  default = null
+}
+
 data "aws_iam_policy_document" "lambda_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -93,8 +103,10 @@ locals {
 }
 
 locals {
-  package_source_dir = "${path.root}/../dist"
-  package_output_zip = "${path.module}/.build/${var.name_prefix}.zip"
+  package_source_override = var.package_source_dir == null ? "" : trimspace(var.package_source_dir)
+  package_output_override = var.package_output_path == null ? "" : trimspace(var.package_output_path)
+  package_source_dir      = local.package_source_override != "" ? local.package_source_override : "${path.root}/../dist"
+  package_output_zip      = local.package_output_override != "" ? local.package_output_override : "${path.module}/.build/${var.name_prefix}.zip"
 }
 
 data "archive_file" "lambda" {
@@ -182,5 +194,3 @@ output "function_name" {
 output "http_api_endpoint" {
   value = aws_apigatewayv2_stage.default.invoke_url
 }
-
-

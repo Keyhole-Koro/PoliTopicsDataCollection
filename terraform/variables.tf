@@ -80,3 +80,57 @@ variable "api_route_key" {
   default     = "POST /run"
 }
 
+variable "use_localstack" {
+  description = "When true, configure the AWS provider to target LocalStack endpoints"
+  type        = bool
+  default     = false
+}
+
+variable "localstack_endpoint" {
+  description = "Base endpoint URL for LocalStack (e.g. http://127.0.0.1:4566)"
+  type        = string
+  default     = null
+}
+
+variable "localstack_access_key" {
+  description = "Static access key used for LocalStack authentication"
+  type        = string
+  default     = "test"
+}
+
+variable "localstack_secret_key" {
+  description = "Static secret key used for LocalStack authentication"
+  type        = string
+  default     = "test"
+}
+
+variable "lambda_package_dir" {
+  description = "Directory containing the built Lambda sources (defaults to ../dist)"
+  type        = string
+  default     = null
+}
+
+variable "lambda_package_output_path" {
+  description = "Path where Terraform should write the packaged Lambda ZIP"
+  type        = string
+  default     = null
+}
+
+variable "create_prompt_queue" {
+  description = "Whether Terraform should create the prompt SQS queue"
+  type        = bool
+  default     = true
+}
+
+variable "existing_prompt_queue_url" {
+  description = "Existing prompt queue URL (required when create_prompt_queue is false)"
+  type        = string
+  default     = null
+}
+
+variable "existing_prompt_queue_arn" {
+  description = "Existing prompt queue ARN (required when create_prompt_queue is false)"
+  type        = string
+  default     = null
+}
+

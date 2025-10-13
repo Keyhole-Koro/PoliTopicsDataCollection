@@ -3,46 +3,41 @@
 import { Handler, ScheduledEvent } from 'aws-lambda';
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 
-import { S3Client } from "@aws-sdk/client-s3";
+import { S3Client } from '@aws-sdk/client-s3';
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import fetchNationalDietRecords from '@NationalDietAPI/NationalDietAPI';
 import type { RawMeetingData, RawSpeechRecord } from '@NationalDietAPI/Raw';
 import { enqueuePromptsWithS3Batch, type PromptTaskMessage } from '@SQS/sqs';
-import { putJsonS3, writeRunLog } from '@S3/s3';
+import { putJsonS3 } from '@S3/s3';
 
-import { prompt } from '@prompts/prompts';
+import { chunk_prompt, reduce_prompt } from '@prompts/prompts';
 import { getAwsRegion } from '@utils/aws';
 
 import { isHttpApiEvent, lowercaseHeaders } from '@utils/http';
-import { defaultCronRange, deriveRangeFromHttp, deriveRangeFromSqsRecord, type RunRange } from '@utils/range';
-import { buildOrderLenByTokens, IndexPack, packIndexSets, type OrderLen } from '@utils/packing';
+import { defaultCronRange, deriveRangeFromHttp, type RunRange } from '@utils/range';
+import { buildOrderLenByTokens, packIndexSets, type OrderLen, type IndexPack } from '@utils/packing';
 
 if (!process.env.GEMINI_MAX_INPUT_TOKEN) {
-  throw new Error("GEMINI_MAX_INPUT_TOKEN is not set");
+  throw new Error('GEMINI_MAX_INPUT_TOKEN is not set');
 }
 if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY is not set");
+  throw new Error('GEMINI_API_KEY is not set');
 }
 
-const prompt_bucket = "politopics-prompts";
+const GEMINI_MODEL = 'gemini-2.5-pro';
+const PROMPT_BUCKET = 'politopics-prompts';
+const RUN_ID_PLACEHOLDER = '';
 
-// AWS SDK setup (supports LocalStack via AWS_ENDPOINT_URL)
 const endpoint = process.env.AWS_ENDPOINT_URL;
 const s3 = new S3Client({ region: getAwsRegion(), ...(endpoint ? { endpoint } : {}) });
 
-// National Diet API endpoint
-const national_diet_api_endpoint = process.env.NATIONAL_DIET_API_ENDPOINT || "https://kokkai.ndl.go.jp/api/meeting";
+const nationalDietApiEndpoint = process.env.NATIONAL_DIET_API_ENDPOINT || 'https://kokkai.ndl.go.jp/api/meeting';
 
-const GEMINI_MAX_INPUT_TOKEN: number = Number(process.env.GEMINI_MAX_INPUT_TOKEN);
+const geminiMaxInputToken: number = Number(process.env.GEMINI_MAX_INPUT_TOKEN);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-
-async function countTokens(text: string): Promise<number> {
-  const response = await model.countTokens({ contents: [{ role: "user", parts: [{ text }] }] });
-  return response.totalTokens;
-}
+const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
 const resJson = (statusCode: number, body: unknown): APIGatewayProxyStructuredResultV2 => ({
   statusCode,
@@ -50,144 +45,223 @@ const resJson = (statusCode: number, body: unknown): APIGatewayProxyStructuredRe
   body: JSON.stringify(body),
 });
 
+type MeetingRecord = NonNullable<RawMeetingData['meetingRecord']>[number];
 
-const composeSpeechesFromIndices = (speeches: RawSpeechRecord[], indices: number[]): RawSpeechRecord[] => {
-  return indices
-    .map((idx) => speeches[idx])
-    .filter((speech): speech is RawSpeechRecord => Boolean(speech));
+async function countTokens(text: string): Promise<number> {
+  const response = await model.countTokens({ contents: [{ role: 'user', parts: [{ text }] }] });
+  return response.totalTokens;
 }
 
-export const handler: Handler = async (event: APIGatewayProxyEventV2 | ScheduledEvent) => {
-  var rr: RunRange | null;
+const collectSpeechesByIndex = (speeches: RawSpeechRecord[], indices: number[]): RawSpeechRecord[] => (
+  indices
+    .map((idx) => speeches[idx])
+    .filter((speech): speech is RawSpeechRecord => Boolean(speech))
+);
 
-  // extract run range from event
+const isoNow = (): string => new Date().toISOString();
+
+const isApiResponse = (value: unknown): value is APIGatewayProxyStructuredResultV2 => (
+  typeof value === 'object' && value !== null && 'statusCode' in value
+);
+
+function resolveRunRange(event: APIGatewayProxyEventV2 | ScheduledEvent): RunRange | APIGatewayProxyStructuredResultV2 {
   if (isHttpApiEvent(event)) {
-    console.log(`[HTTP ${event.requestContext.http.method} ${event.requestContext.http.path}`);
+    console.log(`[HTTP ${event.requestContext.http.method} ${event.requestContext.http.path}]`);
     const headers = lowercaseHeaders(event.headers);
     const expectedKey = process.env.RUN_API_KEY;
     const providedKey = headers['x-api-key'];
-    if (!expectedKey) return resJson(500, { error: 'server_misconfigured', message: 'RUN_API_KEY is not set' });
-    if (providedKey !== expectedKey) return resJson(401, { error: 'unauthorized' });
-
-    // invoked by user on-demand
-    rr = deriveRangeFromHttp(event);
-    if (!rr) return resJson(400, { error: 'invalid_json' });
-    if (rr.from > rr.until) return resJson(400, { error: 'from must be <= until' });
-  } else if (event.source === 'aws.events') {
-    rr = defaultCronRange(); // yesterday
-  } else if (event.source === 'local.events') {
-    const fromDate = process.env.FROM_DATE;
-    const untilDate = process.env.UNTIL_DATE;
-    
-    if (!fromDate || !untilDate) {
-      throw new Error("FROM_DATE and UNTIL_DATE must be set for local events");
+    if (!expectedKey) {
+      return resJson(500, { error: 'server_misconfigured', message: 'RUN_API_KEY is not set' });
     }
-    
-    rr = {
-      from: fromDate,
-      until: untilDate
-    };
-  } else {
-    return resJson(400, { error: 'invalid_range', message: 'Could not determine run range.' });
+    if (providedKey !== expectedKey) {
+      return resJson(401, { error: 'unauthorized' });
+    }
+
+    const range = deriveRangeFromHttp(event);
+    if (!range) {
+      return resJson(400, { error: 'invalid_json' });
+    }
+    if (range.from > range.until) {
+      return resJson(400, { error: 'invalid_range', message: 'from must be <= until' });
+    }
+    return range;
   }
 
-  try {
-    const rawMeetingData: RawMeetingData = await fetchNationalDietRecords(
-      national_diet_api_endpoint,
-      {
-        from: rr.from,
-        until: rr.until
+  switch ((event as ScheduledEvent).source) {
+    case 'aws.events':
+      return defaultCronRange();
+    case 'local.events': {
+      const fromDate = process.env.FROM_DATE;
+      const untilDate = process.env.UNTIL_DATE;
+      if (!fromDate || !untilDate) {
+        throw new Error('FROM_DATE and UNTIL_DATE must be set for local events');
       }
-    );
+      return { from: fromDate, until: untilDate };
+    }
+    default:
+      return resJson(400, { error: 'invalid_range', message: 'Could not determine run range.' });
+  }
+}
 
-    if (rawMeetingData.numberOfRecords && rawMeetingData.numberOfRecords == 0) {
-      console.log(`No meetings found for range ${rr.from} to ${rr.until}`);
+async function fetchMeetingsForRange(range: RunRange): Promise<{ meetings: MeetingRecord[]; recordCount: number }> {
+  const rawMeetingData: RawMeetingData = await fetchNationalDietRecords(
+    nationalDietApiEndpoint,
+    { from: range.from, until: range.until },
+  );
+
+  const meetings = rawMeetingData.meetingRecord ?? [];
+  const recordCountCandidate = typeof rawMeetingData.numberOfRecords === 'number'
+    ? rawMeetingData.numberOfRecords
+    : Number(rawMeetingData.numberOfRecords ?? meetings.length);
+  const recordCount = Number.isFinite(recordCountCandidate) ? recordCountCandidate : meetings.length;
+
+  return { meetings, recordCount };
+}
+
+async function buildTasksForMeeting(args: {
+  meeting: MeetingRecord;
+  chunkPromptTemplate: string;
+  reducePromptTemplate: string;
+  availableTokens: number;
+  range: RunRange;
+}): Promise<PromptTaskMessage[]> {
+  const { meeting, chunkPromptTemplate, reducePromptTemplate, availableTokens, range } = args;
+  const speeches: RawSpeechRecord[] = meeting.speechRecord ?? [];
+
+  if (!speeches.length) {
+    console.log(`[Meeting ${meeting.issueID}] No speeches available; skipping.`);
+    return [];
+  }
+
+  const orderLens: OrderLen[] = await buildOrderLenByTokens({ speeches, countFn: countTokens });
+  const packs: IndexPack[] = packIndexSets(orderLens, availableTokens);
+
+  if (!packs.length) {
+    console.log(`[Meeting ${meeting.issueID}] Unable to create chunk packs within token budget; skipping.`);
+    return [];
+  }
+
+  const tasks: PromptTaskMessage[] = [];
+  const chunkResultUrls: string[] = [];
+
+  for (const pack of packs) {
+    const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
+    const s3key = `prompts/${meeting.issueID}_${pack.indices.join('-')}.json`;
+    const s3Url = `s3://${PROMPT_BUCKET}/${s3key}`;
+    const resultS3Key = `results/${meeting.issueID}_${pack.indices.join('-')}_result.json`;
+    const resultS3Url = `s3://${PROMPT_BUCKET}/${resultS3Key}`;
+
+    try {
+      await putJsonS3({
+        s3,
+        bucket: PROMPT_BUCKET,
+        key: s3key,
+        body: {
+          prompt: chunkPromptTemplate,
+          speeches: chunkSpeeches,
+          speechIds: pack.speech_ids,
+          indices: pack.indices,
+        },
+      });
+    } catch (error) {
+      console.error(`[Meeting ${meeting.issueID}] Failed to write prompt payload to S3:`, error);
+      continue;
+    }
+
+    chunkResultUrls.push(resultS3Url);
+
+    tasks.push({
+      type: 'map',
+      url: s3Url,
+      result_url: resultS3Url,
+      llm: 'gemini',
+      llmModel: GEMINI_MODEL,
+      meta: {
+        speech_ids: pack.speech_ids,
+        totalLen: pack.totalLen,
+        indices: pack.indices,
+        range,
+        issueID: meeting.issueID,
+        runId: RUN_ID_PLACEHOLDER,
+        startedAt: isoNow(),
+      },
+      retryAttempts: 0,
+    });
+  }
+
+  tasks.push({
+    type: 'reduce',
+    chunk_result_urls: chunkResultUrls,
+    prompt: reducePromptTemplate,
+    issueID: meeting.issueID,
+    meeting: {
+      issueID: meeting.issueID,
+      nameOfMeeting: meeting.nameOfMeeting,
+      nameOfHouse: meeting.nameOfHouse,
+      date: meeting.date,
+      numberOfSpeeches: speeches.length,
+    },
+    llm: 'gemini',
+    llmModel: GEMINI_MODEL,
+    meta: {
+      range,
+      runId: RUN_ID_PLACEHOLDER,
+      startedAt: isoNow(),
+    },
+    retryAttempts: 0,
+  });
+
+  return tasks;
+}
+
+export const handler: Handler = async (event: APIGatewayProxyEventV2 | ScheduledEvent) => {
+  const rangeOrResponse = resolveRunRange(event);
+  if (isApiResponse(rangeOrResponse)) {
+    return rangeOrResponse;
+  }
+
+  const range = rangeOrResponse;
+
+  try {
+    const { meetings, recordCount } = await fetchMeetingsForRange(range);
+
+    if (!recordCount || !meetings.length) {
+      console.log(`No meetings found for range ${range.from} to ${range.until}`);
       return resJson(200, { message: 'No meetings found for the specified range.' });
     }
 
-    for (const meeting of rawMeetingData.meetingRecord) {
-      const issueID = meeting.issueID;
-      const speeches = meeting.speechRecord ?? [];
+    const chunkPromptTemplate = chunk_prompt('');
+    const reducePromptTemplate = reduce_prompt('');
+    const promptTokenCost = await countTokens(chunkPromptTemplate);
+    const availableTokens = geminiMaxInputToken - promptTokenCost;
 
-      const orderLens: OrderLen[] = await buildOrderLenByTokens({
-        speeches,
-        countFn: countTokens,
-      });
-
-      const promptTemplate = prompt();
-      const availableTokens = GEMINI_MAX_INPUT_TOKEN - (await countTokens(promptTemplate));
-      const packed: IndexPack[] = packIndexSets(orderLens, availableTokens);
-
-      const items: PromptTaskMessage[] = [];
-      var s3urls: string[] = [];
-
-      for (const p of packed) {
-        const chunkSpeeches = composeSpeechesFromIndices(speeches, p.indices);
-        const s3key = `prompts/${issueID}_${p.indices.join('-')}.json`;
-
-        try {
-          await putJsonS3({
-            s3,
-            bucket: prompt_bucket,
-            key: s3key,
-            body: {
-              prompt: promptTemplate,
-              speeches: chunkSpeeches,
-              speechIds: p.speech_ids,
-              indices: p.indices,
-            },
-          });
-        } catch (error) {
-          console.error('Failed to write prompt payload to S3:', error);
-          continue;
-        }
-
-        s3urls.push(`s3://${prompt_bucket}/${s3key}`);
-
-        items.push({
-          type: 'chunk',
-          url: `s3://${prompt_bucket}/${s3key}`,
-          llm: 'gemini',
-          llmModel: 'gemini-2.5-pro',
-          meta: {
-            speech_ids: p.speech_ids,
-            totalLen: p.totalLen,
-            indices: p.indices,
-            range: rr,
-            runId: '', // to be filled later
-            startedAt: new Date().toISOString(),
-          },
-        });
-      }
-
-      if (s3urls.length) {
-        items.push({
-          type: 'reduce',
-          urls: s3urls,
-          llm: 'gemini',
-          llmModel: 'gemini-2.5-pro',
-          meta: {
-            issueID,
-            numChunks: packed.length,
-            range: rr,
-            runId: '', // to be filled later
-            startedAt: new Date().toISOString(),
-          },
-        });
-      }
-
-      if (items.length) {
-        await enqueuePromptsWithS3Batch({
-          items,
-          queueUrl: process.env.PROMPT_QUEUE_URL,
-        });
-      }
+    if (availableTokens <= 0) {
+      console.error('Chunk prompt exceeds available token budget; aborting run.');
+      return resJson(500, { error: 'prompt_over_budget' });
     }
 
-    //const payload = await preparePromptsForRange(rr.from, rr.until, 'apigw', runId, startedAt);
-    return resJson(200, { message: 'Event processed (on-demand).' });
-  } catch (e) {
-    console.error('Error processing event:', e);
-    return resJson(500, { error: 'internal_error', message: (e as Error).message || e });
+    for (const meeting of meetings) {
+      const tasks = await buildTasksForMeeting({
+        meeting,
+        chunkPromptTemplate,
+        reducePromptTemplate,
+        availableTokens,
+        range,
+      });
+
+      if (!tasks.length) {
+        continue;
+      }
+
+      await enqueuePromptsWithS3Batch({
+        items: tasks,
+        queueUrl: process.env.PROMPT_QUEUE_URL,
+      });
+    }
+
+    return resJson(200, { message: 'Event processed.' });
+  } catch (error) {
+    console.error('Error processing event:', error);
+    return resJson(500, { error: 'internal_error', message: (error as Error).message || error });
   }
-}
+};

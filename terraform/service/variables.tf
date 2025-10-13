@@ -55,3 +55,28 @@ variable "api_route_key" {
   default = "POST /run"
 }
 
+variable "lambda_package_dir" {
+  type    = string
+  default = null
+}
+
+variable "lambda_package_output_path" {
+  type    = string
+  default = null
+}
+
+variable "create_prompt_queue" {
+  type    = bool
+  default = true
+}
+
+variable "existing_prompt_queue_url" {
+  type    = string
+  default = null
+}
+
+variable "existing_prompt_queue_arn" {
+  type    = string
+  default = null
+}
+
