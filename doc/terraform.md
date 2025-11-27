@@ -1,95 +1,73 @@
-# Terraform Deployment
+# Terraform + LocalStack Quickstart
+
+Deploy the complete PoliTopics stack into LocalStack with Terraform to exercise the Lambda, SQS, S3, and DynamoDB workflows end-to-end (the previous `src/local_invoke.ts` helper is gone). Stage/production instructions live elsewhere—this document is purely for the local workflow.
 
 ## Prerequisites
+
 - Terraform 1.8.x (matching `.terraform-version`)
-- AWS credentials with permissions to manage S3, SQS, IAM, and Lambda in `ap-northeast-3`
-- Backend S3 bucket and DynamoDB table (if used) already created and referenced in `terraform/backends/*.tfbackend`
+- Node.js 18+ with npm (Lambda bundle + scripts)
+- Docker + LocalStack running via `npm run local:up`
+- AWS CLI v2 (optional, used by the debugging snippets below)
+
+> LocalStack's community image needs either Docker-in-Docker or the `LAMBDA_EXECUTOR=local` setting to run Lambda functions. The provided `docker-compose.yml` already exports `LAMBDA_EXECUTOR=local`; if you customise the stack, keep that flag (or expose a usable Docker socket) or Lambda creation will fail with `ConnectionRefusedError` during `terraform apply`.
 
 ## Secrets and Environment Variables
-Sensitive Lambda environment variables (e.g., `RUN_API_KEY`, `GEMINI_API_KEY`) should **not** be committed to tfvars files. Supply them via the `TF_VAR_secret_environment_variables` environment variable before running Terraform:
+
+Never commit sensitive Lambda env vars (e.g., `RUN_API_KEY`, `GEMINI_API_KEY`) to tfvars files. Provide them through the `TF_VAR_secret_environment_variables` environment variable before running Terraform:
 
 ```bash
 export TF_VAR_secret_environment_variables='{"RUN_API_KEY":"<run-key>","GEMINI_API_KEY":"<gemini-key>"}'
 ```
 
-Stage and production tfvars files already provide the non-sensitive defaults (e.g., `GEMINI_MAX_INPUT_TOKEN`). Add additional keys to the JSON blob as needed.
-
-## Build Lambda Artifact
-
-Run this once before planning/applying so Terraform can package the local build:
-
-```bash
-npm install
-npm run build
-```
-
-## Stage Deployment
-```bash
-cd terraform
-terraform init -backend-config backends/stage.tfbackend
-terraform plan  -var-file tfvars/stage.tfvars
-terraform apply -var-file tfvars/stage.tfvars
-```
-
-## Production Deployment
-```bash
-cd terraform
-terraform init -backend-config backends/production.tfbackend
-terraform plan  -var-file tfvars/production.tfvars
-terraform apply -var-file tfvars/production.tfvars
-```
-
-Remember to unset the secret export afterwards if you are on a shared shell:
+Unset it afterwards if you are on a shared shell:
 
 ```bash
 unset TF_VAR_secret_environment_variables
 ```
 
-### Reusing an Existing Prompt Queue
+## Terraform + LocalStack Flow
 
-Set `-var="create_prompt_queue=false"` and provide either `existing_prompt_queue_url`/`existing_prompt_queue_arn` or ensure the queue name you supply in `prompt_queue_name` already exists so Terraform can discover it. This is handy when a shared queue is provisioned separately.
+1. **Build or refresh the Lambda bundle and dependency layer** so Terraform sees the expected artifacts:
 
-## LocalStack Quickstart
-
-Use this workflow when you want to deploy the stack to LocalStack for end-to-end testing without touching real AWS accounts.
-
-1. Build the Lambda artifact so Terraform can package the compiled code:
    ```bash
-   npm run build
-   ```
-2. Start (or confirm) LocalStack via Docker Compose:
-   ```bash
-   npm run local:up
-   ```
-3. Initialise Terraform from the repo root; `-chdir=./terraform` plays nicely with Windows shells:
-   ```bash
-   terraform -chdir=./terraform init -backend=false
-   ```
-4. Apply the LocalStack variable profile to stand up the resources:
-   ```bash
-   terraform -chdir=./terraform apply -var-file=tfvars/localstack.tfvars
-   ```
-   You can combine additional flags such as `-var="lambda_package_dir=../dist"` or `-var="create_prompt_queue=true"` to control packaging and queue creation (the defaults already create the queue and use `../dist`).
-5. (Optional) Run integration tests once the queue exists:
-   ```bash
-   AWS_ENDPOINT_URL=http://127.0.0.1:4566 npm test -- sqs.localstack
+   # LocalStack free tier blocks custom layers; this script copies node_modules next to the Lambda code
+   # and leaves a dummy layer artifact so Terraform does not need two code paths (remote vs local).
+   npm install
+   npm run build:local
    ```
 
-Terraform writes `terraform.tfstate` inside `./terraform` when the backend is disabled. Remove that file to reset all state, then destroy the stack when you are finished:
+   This produces `dist/lambda_handler.zip` (Lambda function) and `dist/lambda_layer.zip` (Node.js dependencies).
 
-```bash
-terraform -chdir=./terraform destroy -var-file=tfvars/localstack.tfvars
-```
+2. **Switch into the Terraform configuration directory** :
 
-## GitHub Actions Deployment
+   ```bash
+   cd terraform
+   ```
 
-The workflow in `.github/workflows/deploy.yml` automatically runs `terraform init/plan/apply` when code is pushed to the `stage` or `prod` branches. Configure these repository secrets before enabling the workflow:
+3. **Initialise Terraform with the LocalStack backend config**:
 
-- `STAGE_AWS_ACCESS_KEY_ID` / `STAGE_AWS_SECRET_ACCESS_KEY`
-- `PROD_AWS_ACCESS_KEY_ID` / `PROD_AWS_SECRET_ACCESS_KEY`
-- `STAGE_RUN_API_KEY`, `PROD_RUN_API_KEY`
-- `STAGE_GEMINI_API_KEY`, `PROD_GEMINI_API_KEY`
+   ```bash
+   export ENV=local
+   export TF_VAR_gemini_api_key="fake"
+   terraform init -backend-config=backends/local.hcl
+   ```
 
-The workflow sets `TF_VAR_secret_environment_variables` from those secrets so the API keys never appear in the repository.
+   > Previously pointed at the remote/S3 backend? Append `-reconfigure` so Terraform forgets the earlier backend selection before you run `plan`/`apply`.
 
+4. **Plan the changes** with the LocalStack tfvars profile:
 
+   ```bash
+   terraform plan -var-file="tfvars/localstack.tfvars" -out=tfplan
+   ```
+
+   Saving to `tfplan` keeps the apply reproducible.
+
+   > LocalStack's community image still lacks API Gateway v2 HTTP API emulation. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally. You'll still get the Lambda + SQS + S3 stack, and you can re-enable the HTTP API when targeting AWS or LocalStack Pro.
+
+5. **Apply the planned changes**:
+
+   ```bash
+   terraform apply "tfplan"
+   ```
+
+   You can also skip the saved plan and run `terraform apply -var-file="tfvars/localstack.tfvars"`.

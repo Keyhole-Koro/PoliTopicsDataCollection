@@ -55,6 +55,11 @@ variable "api_route_key" {
   default = "POST /run"
 }
 
+variable "enable_http_api" {
+  type    = bool
+  default = true
+}
+
 variable "lambda_package_dir" {
   type    = string
   default = null
@@ -79,4 +84,3 @@ variable "existing_prompt_queue_arn" {
   type    = string
   default = null
 }
-

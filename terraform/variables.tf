@@ -3,14 +3,8 @@ variable "aws_region" {
   type        = string
 }
 
-variable "aws_profile" {
-  description = "Optional named AWS CLI profile"
-  type        = string
-  default     = null
-}
-
 variable "environment" {
-  description = "Deployment environment identifier (e.g. stage, production)"
+  description = "Deployment environment identifier (e.g. local)"
   type        = string
 }
 
@@ -80,28 +74,10 @@ variable "api_route_key" {
   default     = "POST /run"
 }
 
-variable "use_localstack" {
-  description = "When true, configure the AWS provider to target LocalStack endpoints"
+variable "enable_http_api" {
+  description = "Whether to create the API Gateway HTTP API resources"
   type        = bool
-  default     = false
-}
-
-variable "localstack_endpoint" {
-  description = "Base endpoint URL for LocalStack (e.g. http://127.0.0.1:4566)"
-  type        = string
-  default     = null
-}
-
-variable "localstack_access_key" {
-  description = "Static access key used for LocalStack authentication"
-  type        = string
-  default     = "test"
-}
-
-variable "localstack_secret_key" {
-  description = "Static secret key used for LocalStack authentication"
-  type        = string
-  default     = "test"
+  default     = true
 }
 
 variable "lambda_package_dir" {
@@ -134,3 +110,26 @@ variable "existing_prompt_queue_arn" {
   default     = null
 }
 
+variable "aws_access_key" {
+  description = "Optional AWS access key (falls back to shared credentials or LocalStack defaults)"
+  type        = string
+  default     = null
+}
+
+variable "aws_secret_key" {
+  description = "Optional AWS secret key (falls back to shared credentials or LocalStack defaults)"
+  type        = string
+  default     = null
+}
+
+variable "aws_session_token" {
+  description = "Optional AWS session token"
+  type        = string
+  default     = null
+}
+
+variable "aws_endpoint_url" {
+  description = "Custom AWS endpoint URL (set for LocalStack)"
+  type        = string
+  default     = null
+}

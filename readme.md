@@ -43,6 +43,8 @@ Start LocalStack and DynamoDB admin:
    npm run local:up
    ```
 
+   > The bundled `docker-compose.yml` sets `LAMBDA_EXECUTOR=local` so LocalStack can run Lambda functions without needing nested Docker access. Keep that config (or expose a working Docker socket) if you customise the stack; otherwise Lambda creation will fail during Terraform applies.
+
 Bootstrap LocalStack buckets and queues:
 
    ```bash
@@ -50,6 +52,32 @@ Bootstrap LocalStack buckets and queues:
    ```
 
 Export `PROMPT_QUEUE_URL` from the output and set `AWS_ENDPOINT_URL=http://localhost:4566` (or your LocalStack endpoint) so all AWS SDK clients target LocalStack. The helper in `src/utils/aws.ts` automatically forwards the endpoint to all clients.
+
+### Terraform Local Runs
+
+The old `npm run dev` helper that invoked the Lambda directly has been removed. To exercise the full stack locally, deploy it to LocalStack with Terraform instead:
+
+1. Build the Lambda bundle so Terraform can package it:
+   ```bash
+   npm run build
+   ```
+2. Make sure LocalStack is running (`npm run local:up`).
+3. Apply the LocalStack tfvars profile (backend disabled so state stays local):
+   ```bash
+   terraform -chdir=./terraform init -backend=false
+   terraform -chdir=./terraform apply -var-file=tfvars/localstack.tfvars
+   ```
+
+   > LocalStack's community image still doesn't emulate API Gateway v2 HTTP APIs, so the `tfvars/localstack.tfvars` profile sets `enable_http_api = false`. Terraform will deploy Lambda/S3/SQS/EventBridge locally; switch the flag back on when targeting AWS or LocalStack Pro.
+
+4. (Optional) When the HTTP API is enabled, fetch the endpoint and call it with the configured API key:
+   ```bash
+   export RUN_API_KEY=...
+   ENDPOINT=$(terraform -chdir=./terraform output -raw http_api_endpoint)
+   curl -H "x-api-key: $RUN_API_KEY" -X POST "$ENDPOINT/run"
+   ```
+
+This flow provisions the Lambda, API Gateway (when enabled), buckets, and queues against LocalStack so you can validate cron and HTTP invocations end-to-end. Additional Terraform details live in `doc/terraform.md`.
 
 ## Testing
 

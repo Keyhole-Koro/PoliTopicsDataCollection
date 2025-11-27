@@ -128,7 +128,7 @@ describe('lambda_handler integration with mocked external APIs', () => {
       const queuedItems = enqueuePromptsMock.mock.calls[0][0].items;
       expect(queuedItems).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ type: 'chunk' }),
+          expect.objectContaining({ type: 'map' }),
           expect.objectContaining({ type: 'reduce' }),
         ])
       );

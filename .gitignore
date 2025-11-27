@@ -4,6 +4,8 @@
 node_modules
 __snapshots__
 
+.pnpm-store
+
 *.zip
 dist
 

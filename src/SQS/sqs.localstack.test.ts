@@ -114,7 +114,7 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
       terraformEnv = undefined;
       terraformApplied = false;
     }
-  }, 15000);
+  }, 60000);
 
   afterAll(async () => {
     if (terraformEnv && terraformApplied) {
@@ -136,15 +136,21 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
       {
         type: 'map',
         url: 's3://politopics-prompts/a.json',
+        result_url: 's3://politopics-results/a.json',
         llm: 'gemini',
         llmModel: 'gemini-2.5-pro',
+        retryAttempts: 0,
+        retryMs_in: 0,
         meta: { chunk: 1 },
       },
       {
         type: 'map',
         url: 's3://politopics-prompts/b.json',
+        result_url: 's3://politopics-results/b.json',
         llm: 'gemini',
         llmModel: 'gemini-2.5-pro',
+        retryAttempts: 0,
+        retryMs_in: 0,
         meta: { chunk: 2 },
       },
     ];
@@ -181,15 +187,17 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
     expect(bodies).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'chunk',
+          type: 'map',
           url: 's3://politopics-prompts/a.json',
+          result_url: 's3://politopics-results/a.json',
           llm: 'gemini',
           llmModel: 'gemini-2.5-pro',
           meta: expect.objectContaining({ chunk: 1 }),
         }),
         expect.objectContaining({
-          type: 'chunk',
+          type: 'map',
           url: 's3://politopics-prompts/b.json',
+          result_url: 's3://politopics-results/b.json',
           llm: 'gemini',
           llmModel: 'gemini-2.5-pro',
           meta: expect.objectContaining({ chunk: 2 }),

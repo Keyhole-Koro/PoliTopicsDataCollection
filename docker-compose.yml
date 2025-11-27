@@ -1,16 +1,31 @@
 services:
+  app:
+    image: mcr.microsoft.com/devcontainers/base:jammy
+    command: sleep infinity
+    working_dir: /workspaces/app
+    volumes:
+      - ./:/workspaces/app
+    depends_on:
+      - localstack
+    environment:
+      AWS_REGION: ap-northeast-3
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+
   localstack:
     image: localstack/localstack:latest
     ports:
-      - "4566:4566"
-      - "4510-4559:4510-4559"
+      - "4666:4566"
     environment:
-      - SERVICES=s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway
+      - SERVICES=s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway,logs
       - DEBUG=0
       - LS_LOG=warning
       - AWS_DEFAULT_REGION=ap-northeast-3
+      - LAMBDA_EXECUTOR=docker
     volumes:
       - "localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+
 volumes:
   localstack_data:

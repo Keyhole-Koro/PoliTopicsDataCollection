@@ -47,6 +47,11 @@ variable "api_route_key" {
   default = "POST /run"
 }
 
+variable "enable_http_api" {
+  type    = bool
+  default = true
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
@@ -116,14 +121,14 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_lambda_function" "this" {
-  function_name = "${var.name_prefix}-data-collection-fn"
-  role          = aws_iam_role.lambda.arn
-  handler       = "lambda_handler.handler"
-  runtime       = "nodejs20.x"
-  filename      = data.archive_file.lambda.output_path
+  function_name    = "${var.name_prefix}-data-collection-fn"
+  role             = aws_iam_role.lambda.arn
+  handler          = "lambda_handler.handler"
+  runtime          = "nodejs20.x"
+  filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256
-  memory_size   = var.memory_mb
-  timeout       = var.timeout_sec
+  memory_size      = var.memory_mb
+  timeout          = var.timeout_sec
 
   environment {
     variables = local.env_vars
@@ -153,13 +158,15 @@ resource "aws_lambda_permission" "allow_events" {
 }
 
 resource "aws_apigatewayv2_api" "http" {
+  count         = var.enable_http_api ? 1 : 0
   name          = "${var.name_prefix}-http"
   protocol_type = "HTTP"
   tags          = var.tags
 }
 
 resource "aws_apigatewayv2_integration" "lambda" {
-  api_id                 = aws_apigatewayv2_api.http.id
+  count                  = var.enable_http_api ? 1 : 0
+  api_id                 = aws_apigatewayv2_api.http[0].id
   integration_type       = "AWS_PROXY"
   integration_method     = "POST"
   integration_uri        = aws_lambda_function.this.invoke_arn
@@ -167,24 +174,27 @@ resource "aws_apigatewayv2_integration" "lambda" {
 }
 
 resource "aws_apigatewayv2_route" "lambda" {
-  api_id    = aws_apigatewayv2_api.http.id
+  count     = var.enable_http_api ? 1 : 0
+  api_id    = aws_apigatewayv2_api.http[0].id
   route_key = var.api_route_key
-  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda[0].id}"
 }
 
 resource "aws_apigatewayv2_stage" "default" {
-  api_id      = aws_apigatewayv2_api.http.id
+  count       = var.enable_http_api ? 1 : 0
+  api_id      = aws_apigatewayv2_api.http[0].id
   name        = "$default"
   auto_deploy = true
   tags        = var.tags
 }
 
 resource "aws_lambda_permission" "allow_http_api" {
+  count         = var.enable_http_api ? 1 : 0
   statement_id  = "AllowHttpApiInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.this.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.http[0].execution_arn}/*/*"
 }
 
 output "function_name" {
@@ -192,5 +202,5 @@ output "function_name" {
 }
 
 output "http_api_endpoint" {
-  value = aws_apigatewayv2_stage.default.invoke_url
+  value = var.enable_http_api && length(aws_apigatewayv2_stage.default) > 0 ? aws_apigatewayv2_stage.default[0].invoke_url : ""
 }

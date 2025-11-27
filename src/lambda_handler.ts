@@ -186,6 +186,7 @@ async function buildTasksForMeeting(args: {
         startedAt: isoNow(),
       },
       retryAttempts: 0,
+      retryMs_in: 0,
     });
   }
 
@@ -209,6 +210,7 @@ async function buildTasksForMeeting(args: {
       startedAt: isoNow(),
     },
     retryAttempts: 0,
+    retryMs_in: 0,
   });
 
   return tasks;

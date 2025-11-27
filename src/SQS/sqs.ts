@@ -4,18 +4,26 @@ import { getAwsClientConfig } from '@utils/aws';
 
 const MAX_SQS_DELAY_SECONDS = 900;
 
-export type BasePromptTaskMessage = {
+type BasePromptTaskMessage = {
   meta?: Record<string, any>;
   llm: string;
   llmModel: string;
-  delayMs?: number;
-  retryAttempts?: number;
+  retryAttempts: number;
+  retryMs_in: number;
+};
+
+export type Meeting = {
+  issueID: string;
+  nameOfMeeting: string;
+  nameOfHouse: string;
+  date: string;
+  numberOfSpeeches: number;
 };
 
 export type MapPromptTaskMessage = BasePromptTaskMessage & {
   type: 'map';
   url: string; // s3://bucket/key payload
-  result_url?: string; // optional s3://bucket/key for LLM output
+  result_url: string; // s3://bucket/key for LLM output
 };
 
 export type ReducePromptTaskMessage = BasePromptTaskMessage & {
@@ -23,16 +31,12 @@ export type ReducePromptTaskMessage = BasePromptTaskMessage & {
   chunk_result_urls: string[]; // s3://bucket/key list produced by chunk stage
   prompt: string;
   issueID: string;
-  meeting: {
-    issueID: string;
-    nameOfMeeting: string;
-    nameOfHouse: string;
-    date: string;
-    numberOfSpeeches: number;
-  };
+  meeting: Meeting;
 };
 
 export type PromptTaskMessage = MapPromptTaskMessage | ReducePromptTaskMessage;
+
+// --- Internal types for SQS payload ---
 
 type MapQueuePayload = {
   type: 'map';
@@ -49,7 +53,7 @@ type ReduceQueuePayload = {
   chunk_result_urls: string[];
   prompt: string;
   issueID: string;
-  meeting: ReducePromptTaskMessage['meeting'];
+  meeting: Meeting;
   meta?: Record<string, any>;
   llm: string;
   llmModel: string;
@@ -71,12 +75,12 @@ function ensureRetryAttempts(value: unknown): number {
   return Math.floor(value);
 }
 
-function normaliseDelaySeconds(delayMs: number | undefined): number | undefined {
-  if (delayMs === undefined) return undefined;
-  if (typeof delayMs !== 'number' || !Number.isFinite(delayMs) || delayMs < 0) {
-    throw new Error('delayMs, when provided, must be a finite number >= 0');
+function normaliseDelaySeconds(retryMs_in: number | undefined): number | undefined {
+  if (retryMs_in === undefined) return undefined;
+  if (typeof retryMs_in !== 'number' || !Number.isFinite(retryMs_in) || retryMs_in < 0) {
+    throw new Error('retryMs_in, when provided, must be a finite number >= 0');
   }
-  const seconds = Math.ceil(delayMs / 1000);
+  const seconds = Math.ceil(retryMs_in / 1000);
   if (seconds <= 0) return undefined;
   return Math.min(MAX_SQS_DELAY_SECONDS, seconds);
 }
@@ -92,7 +96,7 @@ function normalisePromptItem(item: PromptTaskMessage, index: number): Normalised
   if (!llmModel) throw new Error('llmModel must be a non-empty string');
 
   const retryAttempts = ensureRetryAttempts(item.retryAttempts);
-  const delaySeconds = normaliseDelaySeconds(item.delayMs);
+  const delaySeconds = normaliseDelaySeconds(item.retryMs_in);
 
   if (item.type === 'map') {
     const url = trimString(item.url);
@@ -100,10 +104,14 @@ function normalisePromptItem(item: PromptTaskMessage, index: number): Normalised
       throw new Error('map tasks require a non-empty url');
     }
     const resultUrl = trimString(item.result_url);
+    if (!resultUrl) {
+      throw new Error('map tasks require a non-empty result_url');
+    }
 
     const body: MapQueuePayload = {
       type: 'map',
       url,
+      result_url: resultUrl,
       meta: item.meta,
       llm,
       llmModel,
@@ -111,7 +119,7 @@ function normalisePromptItem(item: PromptTaskMessage, index: number): Normalised
     };
     if (resultUrl) {
       body.result_url = resultUrl;
-    }
+    };
 
     return {
       delaySeconds,
