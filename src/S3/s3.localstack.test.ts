@@ -9,7 +9,7 @@ import type { BucketLocationConstraint } from '@aws-sdk/client-s3';
 
 import { putJsonS3 } from './s3';
 
-const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL || process.env.AWS_ENDPOINT_URL || 'http://127.0.0.1:4566';
+const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL || process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
 
 describe('putJsonS3 (LocalStack)', () => {
   const ORIGINAL_ENV = process.env;
