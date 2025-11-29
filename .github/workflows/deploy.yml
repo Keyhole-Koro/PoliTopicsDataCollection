@@ -21,6 +21,7 @@ jobs:
       contents: read
       id-token: write
     env:
+      DEPLOY_ENVIRONMENT: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production' || 'stage' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-3' }}
       AWS_ROLE_TO_ASSUME: ${{ startsWith(github.ref, 'refs/heads/prod') && secrets.PROD_ROLE_TO_ASSUME || secrets.STAGE_ROLE_TO_ASSUME }}
       TF_VARS_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production.tfvars' || 'stage.tfvars' }}
@@ -42,6 +43,35 @@ jobs:
       - name: Build Lambda bundle
         run: npm run build
 
+      - name: Extract deployment resource names
+        run: |
+          node <<'NODE' "$GITHUB_ENV" "terraform/tfvars/${TF_VARS_FILE}"
+          const fs = require('node:fs');
+          const envPath = process.argv[2];
+          const tfvarsPath = process.argv[3];
+          const source = fs.readFileSync(tfvarsPath, 'utf8');
+          const extract = (key) => {
+            const regex = new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, 'm');
+            const match = source.match(regex);
+            return match ? match[1] : '';
+          };
+          const serviceName = extract('service_name');
+          const environmentValue = extract('environment');
+          const promptBucket = extract('prompt_bucket_name');
+          const errorBucket = extract('error_bucket_name');
+          const roleName = serviceName && environmentValue
+            ? `${serviceName}-${environmentValue}-data-collection-lambda-role`
+            : '';
+          const lines = [
+            `SERVICE_NAME=${serviceName}`,
+            `ENVIRONMENT_VALUE=${environmentValue}`,
+            `PROMPT_BUCKET_NAME=${promptBucket}`,
+            `ERROR_BUCKET_NAME=${errorBucket}`,
+            `ROLE_NAME=${roleName}`,
+          ].filter(Boolean);
+          fs.appendFileSync(envPath, `${lines.join('\n')}\n`);
+          NODE
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -58,6 +88,29 @@ jobs:
       - name: Terraform Init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: terraform init -backend-config="backends/${TF_BACKEND_FILE}"
+
+      - name: Import existing AWS resources (idempotent)
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        env:
+          ROLE_NAME: ${{ env.ROLE_NAME }}
+          PROMPT_BUCKET_NAME: ${{ env.PROMPT_BUCKET_NAME }}
+          ERROR_BUCKET_NAME: ${{ env.ERROR_BUCKET_NAME }}
+        run: |
+          set +e
+          if [[ -n "${ROLE_NAME}" ]]; then
+            terraform state show module.service.module.lambda.aws_iam_role.lambda >/dev/null 2>&1 \
+              || terraform import module.service.module.lambda.aws_iam_role.lambda "${ROLE_NAME}" || true
+          fi
+
+          if [[ -n "${PROMPT_BUCKET_NAME}" ]]; then
+            terraform state show module.service.module.buckets.aws_s3_bucket.prompt >/dev/null 2>&1 \
+              || terraform import module.service.module.buckets.aws_s3_bucket.prompt "${PROMPT_BUCKET_NAME}" || true
+          fi
+
+          if [[ -n "${ERROR_BUCKET_NAME}" ]]; then
+            terraform state show module.service.module.buckets.aws_s3_bucket.error[0] >/dev/null 2>&1 \
+              || terraform import module.service.module.buckets.aws_s3_bucket.error[0] "${ERROR_BUCKET_NAME}" || true
+          fi
 
       - name: Terraform Format Check
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}

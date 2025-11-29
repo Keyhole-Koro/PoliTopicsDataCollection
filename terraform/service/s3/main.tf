@@ -1,17 +1,3 @@
-variable "prompt_bucket_name" {
-  type = string
-}
-
-variable "error_bucket_name" {
-  type    = string
-  default = null
-}
-
-variable "tags" {
-  type    = map(string)
-  default = {}
-}
-
 resource "aws_s3_bucket" "prompt" {
   bucket = var.prompt_bucket_name
   tags   = var.tags
