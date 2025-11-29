@@ -70,6 +70,20 @@ describe('fetchNationalDietRecords', () => {
     expect(speeches[0]?.speechOrder).toBe(5);
   });
 
+  test('handles empty responses without meetingRecord data', async () => {
+    mockFetchResponse({
+      numberOfRecords: 0,
+      numberOfReturn: 0,
+      startRecord: 1,
+      nextRecordPosition: null,
+    });
+
+    const result = await fetchNationalDietRecords('https://example.com/api');
+    expect(result.numberOfRecords).toBe(0);
+    expect(result.meetingRecord).toEqual([]);
+    expect(result.nextRecordPosition).toBeNull();
+  });
+
   test('throws when payload does not satisfy schema', async () => {
     mockFetchResponse({
       numberOfRecords: 1,

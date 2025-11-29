@@ -9,7 +9,10 @@ import type { BucketLocationConstraint } from '@aws-sdk/client-s3';
 
 import { putJsonS3 } from './s3';
 
-const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL || process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
+const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL;
+if (!LOCALSTACK_ENDPOINT) {
+  throw new Error('LOCALSTACK_URL must be set to run the S3 LocalStack test.');
+}
 
 describe('putJsonS3 (LocalStack)', () => {
   const ORIGINAL_ENV = process.env;
@@ -21,7 +24,7 @@ describe('putJsonS3 (LocalStack)', () => {
   beforeAll(async () => {
     process.env = { ...ORIGINAL_ENV };
     process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
-    process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
+    process.env.LOCALSTACK_URL = LOCALSTACK_ENDPOINT;
 
     const region = process.env.AWS_REGION;
     const typedRegion = region as BucketLocationConstraint;

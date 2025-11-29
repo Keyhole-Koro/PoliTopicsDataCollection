@@ -11,7 +11,7 @@ services:
       AWS_REGION: ap-northeast-3
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
-      AWS_ENDPOINT_URL: http://localstack:4566
+      LOCALSTACK_URL: http://localstack:4566
 
   localstack:
     image: localstack/localstack:latest

@@ -10,7 +10,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { enqueuePromptsWithS3Batch } from '@SQS/sqs';
 
 import { chunk_prompt, reduce_prompt } from '@prompts/prompts';
-import { getAwsRegion } from '@utils/aws';
+import { getAwsEndpoint, getAwsRegion } from '@utils/aws';
 
 import { resJson, isApiResponse } from './lambda/httpResponses';
 import { fetchMeetingsForRange } from './lambda/meetings';
@@ -28,8 +28,12 @@ const GEMINI_MODEL = 'gemini-2.5-pro';
 const PROMPT_BUCKET = 'politopics-prompts';
 const RUN_ID_PLACEHOLDER = '';
 
-const endpoint = process.env.AWS_ENDPOINT_URL;
-const s3 = new S3Client({ region: getAwsRegion(), ...(endpoint ? { endpoint } : {}) });
+const awsRegion = getAwsRegion();
+const awsEndpoint = getAwsEndpoint();
+const s3 = new S3Client({
+  region: awsRegion,
+  ...(awsEndpoint ? { endpoint: awsEndpoint, forcePathStyle: true } : {}),
+});
 
 const nationalDietApiEndpoint = process.env.NATIONAL_DIET_API_ENDPOINT || 'https://kokkai.ndl.go.jp/api/meeting';
 

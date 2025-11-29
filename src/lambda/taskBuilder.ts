@@ -47,10 +47,23 @@ export async function buildTasksForMeeting(args: {
     countTokens,
   } = args;
 
+  const meetingIssueID = meeting.issueID?.trim();
+  if (!meetingIssueID) {
+    console.warn('[Meeting] Missing issueID; skipping meeting with payload:', {
+      date: meeting.date,
+      nameOfMeeting: meeting.nameOfMeeting,
+    });
+    return [];
+  }
+
+  const meetingName = meeting.nameOfMeeting?.trim() || 'Unknown meeting';
+  const meetingHouse = meeting.nameOfHouse?.trim() || 'Unknown house';
+  const meetingDate = meeting.date?.trim() || '';
+
   const speeches: RawSpeechRecord[] = meeting.speechRecord ?? [];
 
   if (!speeches.length) {
-    console.log(`[Meeting ${meeting.issueID}] No speeches available; skipping.`);
+    console.log(`[Meeting ${meetingIssueID}] No speeches available; skipping.`);
     return [];
   }
 
@@ -58,7 +71,7 @@ export async function buildTasksForMeeting(args: {
   const packs: IndexPack[] = packIndexSets(orderLens, availableTokens);
 
   if (!packs.length) {
-    console.log(`[Meeting ${meeting.issueID}] Unable to create chunk packs within token budget; skipping.`);
+    console.log(`[Meeting ${meetingIssueID}] Unable to create chunk packs within token budget; skipping.`);
     return [];
   }
 
@@ -67,9 +80,9 @@ export async function buildTasksForMeeting(args: {
 
   for (const pack of packs) {
     const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
-    const s3key = `prompts/${meeting.issueID}_${pack.indices.join('-')}.json`;
+    const s3key = `prompts/${meetingIssueID}_${pack.indices.join('-')}.json`;
     const s3Url = `s3://${bucket}/${s3key}`;
-    const resultS3Key = `results/${meeting.issueID}_${pack.indices.join('-')}_result.json`;
+    const resultS3Key = `results/${meetingIssueID}_${pack.indices.join('-')}_result.json`;
     const resultS3Url = `s3://${bucket}/${resultS3Key}`;
 
     try {
@@ -85,7 +98,7 @@ export async function buildTasksForMeeting(args: {
         },
       });
     } catch (error) {
-      console.error(`[Meeting ${meeting.issueID}] Failed to write prompt payload to S3:`, error);
+      console.error(`[Meeting ${meetingIssueID}] Failed to write prompt payload to S3:`, error);
       continue;
     }
 
@@ -102,7 +115,7 @@ export async function buildTasksForMeeting(args: {
         totalLen: pack.totalLen,
         indices: pack.indices,
         range,
-        issueID: meeting.issueID,
+        issueID: meetingIssueID,
         runId,
         startedAt: isoNow(),
       },
@@ -115,12 +128,12 @@ export async function buildTasksForMeeting(args: {
     type: 'reduce',
     chunk_result_urls: chunkResultUrls,
     prompt: reducePromptTemplate,
-    issueID: meeting.issueID,
+    issueID: meetingIssueID,
     meeting: {
-      issueID: meeting.issueID,
-      nameOfMeeting: meeting.nameOfMeeting,
-      nameOfHouse: meeting.nameOfHouse,
-      date: meeting.date,
+      issueID: meetingIssueID,
+      nameOfMeeting: meetingName,
+      nameOfHouse: meetingHouse,
+      date: meetingDate || new Date().toISOString().split('T')[0],
       numberOfSpeeches: speeches.length,
     },
     llm: 'gemini',

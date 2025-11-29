@@ -20,19 +20,24 @@ const numericField = pipe(
   check((value) => Number.isFinite(value), 'Expected a finite number'),
 );
 
+const stringField = pipe(
+  optional(union([string(), null_()])),
+  transform((value) => value ?? ''),
+);
+
 export const rawSpeechRecordSchema = object({
   speechID: string(),
   speechOrder: numericField,
-  speaker: string(),
+  speaker: stringField,
   speakerYomi: nullable(string()),
   speakerGroup: nullable(string()),
   speakerPosition: nullable(string()),
   speakerRole: nullable(string()),
-  speech: string(),
+  speech: stringField,
   startPage: numericField,
-  createTime: string(),
-  updateTime: string(),
-  speechURL: string(),
+  createTime: stringField,
+  updateTime: stringField,
+  speechURL: stringField,
 });
 
 const speechRecordArraySchema = pipe(
@@ -48,20 +53,20 @@ const speechRecordArraySchema = pipe(
 export type RawSpeechRecord = InferOutput<typeof rawSpeechRecordSchema>;
 
 export const rawMeetingRecordSchema = object({
-  issueID: string(),
-  imageKind: string(),
+  issueID: stringField,
+  imageKind: stringField,
   searchObject: numericField,
   session: numericField,
-  nameOfHouse: string(),
-  nameOfMeeting: string(),
-  issue: string(),
-  date: string(),
+  nameOfHouse: stringField,
+  nameOfMeeting: stringField,
+  issue: stringField,
+  date: stringField,
   closing: nullable(string()),
   speechRecord: speechRecordArraySchema,
 });
 
 const meetingRecordArraySchema = pipe(
-  optional(union([array(rawMeetingRecordSchema), rawMeetingRecordSchema, null_()])),
+  union([array(rawMeetingRecordSchema), rawMeetingRecordSchema, null_()]),
   transform((value) => {
     if (!value) {
       return [];
@@ -70,14 +75,19 @@ const meetingRecordArraySchema = pipe(
   }),
 );
 
+const meetingRecordFieldSchema = pipe(
+  optional(meetingRecordArraySchema),
+  transform((value) => value ?? []),
+);
+
 export type RawMeetingRecord = InferOutput<typeof rawMeetingRecordSchema>;
 
 export const rawMeetingDataSchema = object({
   numberOfRecords: numericField,
   numberOfReturn: numericField,
   startRecord: numericField,
-  nextRecordPosition: numericField,
-  meetingRecord: meetingRecordArraySchema,
+  nextRecordPosition: nullable(numericField),
+  meetingRecord: meetingRecordFieldSchema,
 });
 
 export type RawMeetingData = InferOutput<typeof rawMeetingDataSchema>;

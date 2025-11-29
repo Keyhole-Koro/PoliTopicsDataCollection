@@ -9,7 +9,10 @@ import {
 
 import { enqueuePromptsWithS3Batch, type PromptTaskMessage } from './sqs';
 
-const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL || process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
+const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL;
+if (!LOCALSTACK_ENDPOINT) {
+  throw new Error('LOCALSTACK_URL must be set to run the SQS LocalStack test.');
+}
 
 describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
   const ORIGINAL_ENV = process.env;
@@ -22,7 +25,7 @@ describe('enqueuePromptsWithS3Batch (LocalStack)', () => {
   beforeAll(async () => {
     process.env = { ...ORIGINAL_ENV };
     process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
-    process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
+    process.env.LOCALSTACK_URL = LOCALSTACK_ENDPOINT;
 
     try {
       sqs = new SQSClient({

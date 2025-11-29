@@ -21,3 +21,5 @@ src/**/*.json
 
 # contains logs instead of s3 in local development
 out
+
+localstack-artifacts

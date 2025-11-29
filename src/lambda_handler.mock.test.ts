@@ -2,7 +2,8 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import type { RawMeetingData } from '@NationalDietAPI/Raw';
 
-import { startMockNationalDietApi, installMockGeminiCountTokens } from './testUtils/mockApis';
+import { installMockGeminiCountTokens } from './testUtils/mockApis';
+import fetchNationalDietRecords from '@NationalDietAPI/NationalDietAPI';
 
 describe('lambda_handler integration with mocked external APIs', () => {
   const ORIGINAL_ENV = process.env;
@@ -68,9 +69,13 @@ describe('lambda_handler integration with mocked external APIs', () => {
       ],
     };
 
-    const mockApi = await startMockNationalDietApi(dietResponse);
+    jest.spyOn(global, 'fetch' as any).mockImplementation(async () => ({
+      ok: true,
+      statusText: 'OK',
+      json: async () => dietResponse,
+    } as Response));
 
-    process.env.NATIONAL_DIET_API_ENDPOINT = mockApi.url;
+    process.env.NATIONAL_DIET_API_ENDPOINT = 'https://mock.ndl.go.jp/api/meeting';
     process.env.GEMINI_MAX_INPUT_TOKEN = '100';
     process.env.GEMINI_API_KEY = 'fake-key';
     process.env.RUN_API_KEY = 'secret';
@@ -134,6 +139,6 @@ describe('lambda_handler integration with mocked external APIs', () => {
       );
     });
 
-    await mockApi.close();
+    (global.fetch as jest.Mock | undefined)?.mockRestore();
   });
 });
