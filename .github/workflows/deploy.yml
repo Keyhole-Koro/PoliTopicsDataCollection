@@ -21,8 +21,11 @@ jobs:
       contents: read
       id-token: write
     env:
-      AWS_REGION: "ap-northeast-3"
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-3' }}
       AWS_ROLE_TO_ASSUME: ${{ startsWith(github.ref, 'refs/heads/prod') && secrets.PROD_ROLE_TO_ASSUME || secrets.STAGE_ROLE_TO_ASSUME }}
+      TF_VARS_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production.tfvars' || 'stage.tfvars' }}
+      TF_BACKEND_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production.hcl' || 'stage.hcl' }}
+      TF_VAR_secret_environment_variables: ${{ startsWith(github.ref, 'refs/heads/prod') && format('{{"RUN_API_KEY":"{0}","GEMINI_API_KEY":"{1}"}}', secrets.PROD_RUN_API_KEY, secrets.PROD_GEMINI_API_KEY) || format('{{"RUN_API_KEY":"{0}","GEMINI_API_KEY":"{1}"}}', secrets.STAGE_RUN_API_KEY, secrets.STAGE_GEMINI_API_KEY) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,37 +41,6 @@ jobs:
 
       - name: Build Lambda bundle
         run: npm run build
-
-      - name: Set deployment target
-        run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
-            echo "TF_VARS_FILE=production.tfvars" >> "$GITHUB_ENV"
-            echo "TF_BACKEND_FILE=production.hcl" >> "$GITHUB_ENV"
-          else
-            echo "TF_VARS_FILE=stage.tfvars" >> "$GITHUB_ENV"
-            echo "TF_BACKEND_FILE=stage.hcl" >> "$GITHUB_ENV"
-          fi
-
-      - name: Configure secret environment variables
-        env:
-          STAGE_RUN_API_KEY: ${{ secrets.STAGE_RUN_API_KEY }}
-          STAGE_GEMINI_API_KEY: ${{ secrets.STAGE_GEMINI_API_KEY }}
-          PROD_RUN_API_KEY: ${{ secrets.PROD_RUN_API_KEY }}
-          PROD_GEMINI_API_KEY: ${{ secrets.PROD_GEMINI_API_KEY }}
-        run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
-            if [[ -z "${PROD_RUN_API_KEY}" || -z "${PROD_GEMINI_API_KEY}" ]]; then
-              echo "Production secrets (RUN_API_KEY / GEMINI_API_KEY) are not set." >&2
-              exit 1
-            fi
-            echo "TF_VAR_secret_environment_variables={\"RUN_API_KEY\":\"${PROD_RUN_API_KEY}\",\"GEMINI_API_KEY\":\"${PROD_GEMINI_API_KEY}\"}" >> "$GITHUB_ENV"
-          else
-            if [[ -z "${STAGE_RUN_API_KEY}" || -z "${STAGE_GEMINI_API_KEY}" ]]; then
-              echo "Stage secrets (RUN_API_KEY / GEMINI_API_KEY) are not set." >&2
-              exit 1
-            fi
-            echo "TF_VAR_secret_environment_variables={\"RUN_API_KEY\":\"${STAGE_RUN_API_KEY}\",\"GEMINI_API_KEY\":\"${STAGE_GEMINI_API_KEY}\"}" >> "$GITHUB_ENV"
-          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
