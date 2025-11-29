@@ -1,9 +1,9 @@
 aws_region          = "ap-northeast-3"
 environment         = "production"
 service_name        = "politopics"
-prompt_bucket_name  = "politopics-prompts-production"
-error_bucket_name   = "politopics-errors-production"
-prompt_queue_name   = "politopics-prompt-queue-production"
+prompt_bucket_name  = "politopics-data-collection-prompts-production"
+error_bucket_name   = "politopics-data-collection-errors-production"
+prompt_queue_name   = "politopics-data-collection-prompt-queue-production"
 lambda_memory_mb    = 1024
 lambda_timeout_sec  = 300
 schedule_expression = "cron(0 22 * * ? *)"

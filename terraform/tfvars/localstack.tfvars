@@ -1,9 +1,9 @@
 aws_region          = "ap-northeast-3"
 environment         = "local"
 service_name        = "politopics"
-prompt_bucket_name  = "politopics-prompts-local"
-error_bucket_name   = "politopics-errors-local"
-prompt_queue_name   = "politopics-prompt-queue-local"
+prompt_bucket_name  = "politopics-data-collection-prompts-local"
+error_bucket_name   = "politopics-data-collection-errors-local"
+prompt_queue_name   = "politopics-data-collection-prompt-queue-local"
 aws_endpoint_url    = "http://localstack:4566"
 lambda_memory_mb    = 512
 lambda_timeout_sec  = 120

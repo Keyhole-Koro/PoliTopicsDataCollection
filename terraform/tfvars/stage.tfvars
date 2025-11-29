@@ -1,9 +1,9 @@
 aws_region          = "ap-northeast-3"
 environment         = "stage"
 service_name        = "politopics"
-prompt_bucket_name  = "politopics-prompts-stage"
-error_bucket_name   = "politopics-errors-stage"
-prompt_queue_name   = "politopics-prompt-queue-stage"
+prompt_bucket_name  = "politopics-data-collection-prompts-stage"
+error_bucket_name   = "politopics-data-collection-errors-stage"
+prompt_queue_name   = "politopics-data-collection-prompt-queue-stage"
 lambda_memory_mb    = 1024
 lambda_timeout_sec  = 300
 schedule_expression = "cron(0 22 * * ? *)"
