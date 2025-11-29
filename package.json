@@ -30,7 +30,7 @@
     "aws-lambda": "^1.0.7",
     "dotenv": "^16.5.0",
     "fs-extra": "^11.3.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "valibot": "^1.2.0"
   }
 }
-
