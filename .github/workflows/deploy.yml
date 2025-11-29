@@ -62,25 +62,36 @@ jobs:
       - name: Import existing AWS resources (idempotent)
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: |
-          set +e
+          set -euo pipefail
+
+          exists() {
+            terraform state show "$1" >/dev/null 2>&1
+          }
+
           if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
-            terraform state show module.service.module.lambda.aws_iam_role.lambda >/dev/null 2>&1 \
-              || terraform import module.service.module.lambda.aws_iam_role.lambda politopics-production-data-collection-lambda-role || true
+            if ! exists module.service.module.lambda.aws_iam_role.lambda; then
+              terraform import module.service.module.lambda.aws_iam_role.lambda politopics-production-data-collection-lambda-role
+            fi
 
-            terraform state show module.service.module.buckets.aws_s3_bucket.prompt >/dev/null 2>&1 \
-              || terraform import module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-production || true
+            if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
+              terraform import module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-production
+            fi
 
-            terraform state show module.service.module.buckets.aws_s3_bucket.error[0] >/dev/null 2>&1 \
-              || terraform import module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-production || true
+            if ! exists module.service.module.buckets.aws_s3_bucket.error[0]; then
+              terraform import module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-production
+            fi
           else
-            terraform state show module.service.module.lambda.aws_iam_role.lambda >/dev/null 2>&1 \
-              || terraform import module.service.module.lambda.aws_iam_role.lambda politopics-stage-data-collection-lambda-role || true
+            if ! exists module.service.module.lambda.aws_iam_role.lambda; then
+              terraform import module.service.module.lambda.aws_iam_role.lambda politopics-stage-data-collection-lambda-role
+            fi
 
-            terraform state show module.service.module.buckets.aws_s3_bucket.prompt >/dev/null 2>&1 \
-              || terraform import module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-stage || true
+            if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
+              terraform import module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-stage
+            fi
 
-            terraform state show module.service.module.buckets.aws_s3_bucket.error[0] >/dev/null 2>&1 \
-              || terraform import module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-stage || true
+            if ! exists module.service.module.buckets.aws_s3_bucket.error[0]; then
+              terraform import module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-stage
+            fi
           fi
 
       - name: Terraform Format Check
