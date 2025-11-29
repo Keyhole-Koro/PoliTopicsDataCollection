@@ -63,6 +63,7 @@ jobs:
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: |
           set -euo pipefail
+          VAR_FILE="tfvars/${TF_VARS_FILE}"
 
           exists() {
             terraform state show "$1" >/dev/null 2>&1
@@ -70,27 +71,27 @@ jobs:
 
           if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
             if ! exists module.service.module.lambda.aws_iam_role.lambda; then
-              terraform import module.service.module.lambda.aws_iam_role.lambda politopics-production-data-collection-lambda-role
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_iam_role.lambda politopics-production-data-collection-lambda-role
             fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
-              terraform import module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-production
+              terraform import -var-file="${VAR_FILE}" module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-production
             fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.error[0]; then
-              terraform import module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-production
+              terraform import -var-file="${VAR_FILE}" module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-production
             fi
           else
             if ! exists module.service.module.lambda.aws_iam_role.lambda; then
-              terraform import module.service.module.lambda.aws_iam_role.lambda politopics-stage-data-collection-lambda-role
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_iam_role.lambda politopics-stage-data-collection-lambda-role
             fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
-              terraform import module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-stage
+              terraform import -var-file="${VAR_FILE}" module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-stage
             fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.error[0]; then
-              terraform import module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-stage
+              terraform import -var-file="${VAR_FILE}" module.service.module.buckets.aws_s3_bucket.error[0] politopics-data-collection-errors-stage
             fi
           fi
 
