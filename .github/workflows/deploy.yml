@@ -76,6 +76,12 @@ jobs:
             if ! exists module.service.module.lambda.aws_lambda_function.this; then
               terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_function.this politopics-production-data-collection-fn
             fi
+            if ! exists module.service.module.lambda.aws_lambda_permission.allow_events; then
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_permission.allow_events politopics-production-data-collection-fn/AllowEventBridgeInvoke
+            fi
+            if ! exists module.service.module.lambda.aws_lambda_permission.allow_http_api[0]; then
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_permission.allow_http_api[0] politopics-production-http/$default/POST/*
+            fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
               terraform import -var-file="${VAR_FILE}" module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-production
@@ -90,6 +96,12 @@ jobs:
             fi
             if ! exists module.service.module.lambda.aws_lambda_function.this; then
               terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_function.this politopics-stage-data-collection-fn
+            fi
+            if ! exists module.service.module.lambda.aws_lambda_permission.allow_events; then
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_permission.allow_events politopics-stage-data-collection-fn/AllowEventBridgeInvoke
+            fi
+            if ! exists module.service.module.lambda.aws_lambda_permission.allow_http_api[0]; then
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_permission.allow_http_api[0] politopics-stage-http/$default/POST/*
             fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
