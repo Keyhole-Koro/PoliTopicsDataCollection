@@ -73,6 +73,9 @@ jobs:
             if ! exists module.service.module.lambda.aws_iam_role.lambda; then
               terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_iam_role.lambda politopics-production-data-collection-lambda-role
             fi
+            if ! exists module.service.module.lambda.aws_lambda_function.this; then
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_function.this politopics-production-data-collection-fn
+            fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
               terraform import -var-file="${VAR_FILE}" module.service.module.buckets.aws_s3_bucket.prompt politopics-data-collection-prompts-production
@@ -84,6 +87,9 @@ jobs:
           else
             if ! exists module.service.module.lambda.aws_iam_role.lambda; then
               terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_iam_role.lambda politopics-stage-data-collection-lambda-role
+            fi
+            if ! exists module.service.module.lambda.aws_lambda_function.this; then
+              terraform import -var-file="${VAR_FILE}" module.service.module.lambda.aws_lambda_function.this politopics-stage-data-collection-fn
             fi
 
             if ! exists module.service.module.buckets.aws_s3_bucket.prompt; then
