@@ -23,3 +23,7 @@ src/**/*.json
 out
 
 localstack-artifacts
+
+.build
+
+*.tmp

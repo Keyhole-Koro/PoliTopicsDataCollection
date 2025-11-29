@@ -1,102 +1,99 @@
-﻿name: Deploy
+name: Deploy Lambda
 
 on:
   push:
-    branches: [ stage, prod ]
+    branches:
+      - stage
+      - prod
+  workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
+env:
+  NODE_VERSION: "22"
+  TERRAFORM_VERSION: "1.9.5"
+  TERRAFORM_WORKING_DIR: terraform
 
 jobs:
-  deploy-stage:
-    if: github.ref == 'refs/heads/stage'
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production' || 'stage' }}
+    permissions:
+      contents: read
+      id-token: write
     env:
-      AWS_REGION: ap-northeast-3
-      TF_VAR_secret_environment_variables: >-
-        {"RUN_API_KEY":"${{ secrets.STAGE_RUN_API_KEY }}","GEMINI_API_KEY":"${{ secrets.STAGE_GEMINI_API_KEY }}"}
+      AWS_ROLE_TO_ASSUME: ${{ startsWith(github.ref, 'refs/heads/prod') && secrets.PROD_ROLE_TO_ASSUME || secrets.STAGE_ROLE_TO_ASSUME }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build Lambda bundle
         run: npm run build
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Set deployment target
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
+            echo "TF_VARS_FILE=production.tfvars" >> "$GITHUB_ENV"
+            echo "TF_BACKEND_FILE=production.hcl" >> "$GITHUB_ENV"
+          else
+            echo "TF_VARS_FILE=stage.tfvars" >> "$GITHUB_ENV"
+            echo "TF_BACKEND_FILE=stage.hcl" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure secret environment variables
+        env:
+          STAGE_RUN_API_KEY: ${{ secrets.STAGE_RUN_API_KEY }}
+          STAGE_GEMINI_API_KEY: ${{ secrets.STAGE_GEMINI_API_KEY }}
+          PROD_RUN_API_KEY: ${{ secrets.PROD_RUN_API_KEY }}
+          PROD_GEMINI_API_KEY: ${{ secrets.PROD_GEMINI_API_KEY }}
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
+            if [[ -z "${PROD_RUN_API_KEY}" || -z "${PROD_GEMINI_API_KEY}" ]]; then
+              echo "Production secrets (RUN_API_KEY / GEMINI_API_KEY) are not set." >&2
+              exit 1
+            fi
+            echo "TF_VAR_secret_environment_variables={\"RUN_API_KEY\":\"${PROD_RUN_API_KEY}\",\"GEMINI_API_KEY\":\"${PROD_GEMINI_API_KEY}\"}" >> "$GITHUB_ENV"
+          else
+            if [[ -z "${STAGE_RUN_API_KEY}" || -z "${STAGE_GEMINI_API_KEY}" ]]; then
+              echo "Stage secrets (RUN_API_KEY / GEMINI_API_KEY) are not set." >&2
+              exit 1
+            fi
+            echo "TF_VAR_secret_environment_variables={\"RUN_API_KEY\":\"${STAGE_RUN_API_KEY}\",\"GEMINI_API_KEY\":\"${STAGE_GEMINI_API_KEY}\"}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          role-to-assume: ${{ secrets.STAGE_ROLE_TO_ASSUME }}
-          role-session-name: gha-stage
-          aws-region: ap-northeast-3
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          terraform_version: 1.12.2
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-session-name: politopics-github-actions
+          aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Terraform Init (stage)
-        working-directory: terraform
-        run: terraform init -reconfigure -backend-config=backends/stage.tfbackend
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform init -backend-config="backends/${TF_BACKEND_FILE}"
 
-      - name: Terraform Validate (stage)
-        working-directory: terraform
-        run: terraform validate
+      - name: Terraform Format Check
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform fmt -check
 
-      - name: Terraform Plan (stage)
-        working-directory: terraform
-        run: terraform plan -input=false -no-color -var-file=tfvars/stage.tfvars -out=tfplan
+      - name: Terraform Plan
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform plan -var-file="tfvars/${TF_VARS_FILE}" -out=tfplan
 
-      - name: Terraform Apply (stage)
-        working-directory: terraform
-        run: terraform apply -input=false -auto-approve tfplan
-
-  deploy-prod:
-    if: github.ref == 'refs/heads/prod'
-    runs-on: ubuntu-latest
-    env:
-      AWS_REGION: ap-northeast-3
-      TF_VAR_secret_environment_variables: >-
-        {"RUN_API_KEY":"${{ secrets.PROD_RUN_API_KEY }}","GEMINI_API_KEY":"${{ secrets.PROD_GEMINI_API_KEY }}"}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.PROD_ROLE_TO_ASSUME }}
-          role-session-name: gha-prod
-          aws-region: ap-northeast-3
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.12.2
-
-      - name: Terraform Init (prod)
-        working-directory: terraform
-        run: terraform init -reconfigure -backend-config=backends/production.tfbackend
-
-      - name: Terraform Validate (prod)
-        working-directory: terraform
-        run: terraform validate
-
-      - name: Terraform Plan (prod)
-        working-directory: terraform
-        run: terraform plan -input=false -no-color -var-file=tfvars/production.tfvars -out=tfplan
-
-      - name: Terraform Apply (prod)
-        working-directory: terraform
-        run: terraform apply -input=false -auto-approve tfplan
+      - name: Terraform Apply
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan
