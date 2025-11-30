@@ -2,6 +2,16 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
 
+const putMapTasksMock = jest.fn();
+const putReduceTaskMock = jest.fn();
+
+jest.doMock('@DynamoDB/tasks', () => ({
+  TaskRepository: jest.fn().mockImplementation(() => ({
+    putMapTasks: putMapTasksMock,
+    putReduceTask: putReduceTaskMock,
+  })),
+}));
+
 describe('lambda_handler run endpoint', () => {
   const ORIGINAL_ENV = process.env;
 
@@ -35,6 +45,8 @@ describe('lambda_handler run endpoint', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    putMapTasksMock.mockReset();
+    putReduceTaskMock.mockReset();
     process.env = { ...ORIGINAL_ENV };
   });
 
@@ -62,7 +74,6 @@ describe('lambda_handler run endpoint', () => {
     process.env.RUN_API_KEY = 'secret';
     process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
     process.env.GEMINI_API_KEY = 'fake';
-    process.env.PROMPT_QUEUE_URL = 'https://sqs.local/example';
     process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
 
     const fetchMock = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({
@@ -77,6 +88,16 @@ describe('lambda_handler run endpoint', () => {
       }),
     } as Response);
 
+    const putMapTasksMock = jest.fn().mockResolvedValue(undefined);
+    const putReduceTaskMock = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock('@DynamoDB/tasks', () => ({
+      TaskRepository: jest.fn().mockImplementation(() => ({
+        putMapTasks: putMapTasksMock,
+        putReduceTask: putReduceTaskMock,
+      })),
+    }));
+
     installMockGeminiCountTokens(10);
 
     await jest.isolateModulesAsync(async () => {
@@ -89,6 +110,8 @@ describe('lambda_handler run endpoint', () => {
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body as string)).toEqual({ message: 'No meetings found for the specified range.' });
       expect(fetchMock).toHaveBeenCalled();
+      expect(putMapTasksMock).not.toHaveBeenCalled();
+      expect(putReduceTaskMock).not.toHaveBeenCalled();
     });
 
     fetchMock.mockRestore();

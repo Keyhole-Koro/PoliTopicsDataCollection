@@ -29,11 +29,11 @@ variable "error_bucket" {
   default = null
 }
 
-variable "prompt_queue_arn" {
+variable "task_table_name" {
   type = string
 }
 
-variable "prompt_queue_url" {
+variable "task_table_arn" {
   type = string
 }
 

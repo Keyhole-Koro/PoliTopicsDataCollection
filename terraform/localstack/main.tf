@@ -9,8 +9,8 @@ terraform {
   }
 }
 
-variable "queue_name" {
-  description = "Name for the LocalStack SQS queue used in integration tests"
+variable "table_name" {
+  description = "Name for the LocalStack DynamoDB table used in integration tests"
   type        = string
 }
 
@@ -36,25 +36,48 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    sqs = var.localstack_endpoint
+    dynamodb = var.localstack_endpoint
   }
 }
 
-resource "aws_sqs_queue" "prompt" {
-  name                       = var.queue_name
-  visibility_timeout_seconds = 30
-  message_retention_seconds  = 345600
-  receive_wait_time_seconds  = 10
+resource "aws_dynamodb_table" "tasks" {
+  name         = var.table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  attribute {
+    name = "createdAt"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "StatusIndex"
+    hash_key        = "status"
+    range_key       = "createdAt"
+    projection_type = "ALL"
+  }
 }
 
-output "prompt_queue_url" {
-  value = aws_sqs_queue.prompt.id
+output "table_name" {
+  value = aws_dynamodb_table.tasks.name
 }
 
-output "prompt_queue_name" {
-  value = aws_sqs_queue.prompt.name
-}
-
-output "prompt_queue_arn" {
-  value = aws_sqs_queue.prompt.arn
+output "table_arn" {
+  value = aws_dynamodb_table.tasks.arn
 }

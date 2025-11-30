@@ -20,18 +20,36 @@ resource "aws_iam_role_policy_attachment" "basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy_attachment" "sqs_execution" {
+resource "aws_iam_policy" "dynamodb_tasks" {
+  name        = "${var.name_prefix}-dynamodb-tasks"
+  description = "Allow Lambda to manage LLM tasks table"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["dynamodb:PutItem", "dynamodb:BatchWriteItem", "dynamodb:UpdateItem", "dynamodb:GetItem", "dynamodb:Query"]
+        Resource = [
+          var.task_table_arn,
+          "${var.task_table_arn}/index/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dynamodb_tasks" {
   role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
+  policy_arn = aws_iam_policy.dynamodb_tasks.arn
 }
 
 locals {
   env_vars = merge(
     {
-      PROMPT_BUCKET    = var.prompt_bucket
-      ERROR_BUCKET     = coalesce(var.error_bucket, "")
-      PROMPT_QUEUE_URL = var.prompt_queue_url
-      PROMPT_QUEUE_ARN = var.prompt_queue_arn
+      PROMPT_BUCKET  = var.prompt_bucket
+      ERROR_BUCKET   = coalesce(var.error_bucket, "")
+      LLM_TASK_TABLE = var.task_table_name
     },
     var.environment_variables,
     var.secret_environment_variables,

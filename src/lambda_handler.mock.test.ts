@@ -79,18 +79,20 @@ describe('lambda_handler integration with mocked external APIs', () => {
     process.env.GEMINI_MAX_INPUT_TOKEN = '100';
     process.env.GEMINI_API_KEY = 'fake-key';
     process.env.RUN_API_KEY = 'secret';
-    process.env.PROMPT_QUEUE_URL = 'https://sqs.local/mock';
-
     const putJsonS3Mock = jest.fn().mockResolvedValue(undefined);
-    const enqueuePromptsMock = jest.fn().mockResolvedValue({ queued: 0, urls: [] });
+    const putMapTasksMock = jest.fn().mockResolvedValue(undefined);
+    const putReduceTaskMock = jest.fn().mockResolvedValue(undefined);
 
     jest.doMock('@S3/s3', () => ({
       putJsonS3: putJsonS3Mock,
       writeRunLog: jest.fn(),
     }));
 
-    jest.doMock('@SQS/sqs', () => ({
-      enqueuePromptsWithS3Batch: enqueuePromptsMock,
+    jest.doMock('@DynamoDB/tasks', () => ({
+      TaskRepository: jest.fn().mockImplementation(() => ({
+        putMapTasks: putMapTasksMock,
+        putReduceTask: putReduceTaskMock,
+      })),
     }));
 
     installMockGeminiCountTokens(10);
@@ -128,15 +130,18 @@ describe('lambda_handler integration with mocked external APIs', () => {
 
       expect(response.statusCode).toBe(200);
       expect(putJsonS3Mock).toHaveBeenCalled();
-      expect(enqueuePromptsMock).toHaveBeenCalled();
+      expect(putMapTasksMock).toHaveBeenCalled();
+      expect(putReduceTaskMock).toHaveBeenCalled();
 
-      const queuedItems = enqueuePromptsMock.mock.calls[0][0].items;
+      const queuedItems = putMapTasksMock.mock.calls[0][0];
       expect(queuedItems).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ type: 'map' }),
-          expect.objectContaining({ type: 'reduce' }),
         ])
       );
+
+      const reduceItem = putReduceTaskMock.mock.calls[0][0];
+      expect(reduceItem).toEqual(expect.objectContaining({ type: 'reduce', pk: 'MTG-001' }));
     });
 
     (global.fetch as jest.Mock | undefined)?.mockRestore();

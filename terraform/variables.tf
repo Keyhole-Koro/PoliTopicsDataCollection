@@ -24,13 +24,6 @@ variable "error_bucket_name" {
   default     = null
 }
 
-variable "prompt_queue_name" {
-  description = "SQS queue for prompt fan-out"
-  type        = string
-}
-
-
-
 variable "lambda_memory_mb" {
   description = "Lambda memory size in MB"
   type        = number
@@ -92,22 +85,9 @@ variable "lambda_package_output_path" {
   default     = null
 }
 
-variable "create_prompt_queue" {
-  description = "Whether Terraform should create the prompt SQS queue"
-  type        = bool
-  default     = true
-}
-
-variable "existing_prompt_queue_url" {
-  description = "Existing prompt queue URL (required when create_prompt_queue is false)"
+variable "llm_task_table_name" {
+  description = "DynamoDB table name for LLM tasks"
   type        = string
-  default     = null
-}
-
-variable "existing_prompt_queue_arn" {
-  description = "Existing prompt queue ARN (required when create_prompt_queue is false)"
-  type        = string
-  default     = null
 }
 
 variable "aws_access_key" {

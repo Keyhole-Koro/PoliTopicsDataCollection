@@ -7,8 +7,6 @@ import { S3Client } from '@aws-sdk/client-s3';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import { enqueuePromptsWithS3Batch } from '@SQS/sqs';
-
 import { chunk_prompt, reduce_prompt } from '@prompts/prompts';
 import { getAwsEndpoint, getAwsRegion } from '@utils/aws';
 
@@ -16,6 +14,7 @@ import { resJson, isApiResponse } from './lambda/httpResponses';
 import { fetchMeetingsForRange } from './lambda/meetings';
 import { resolveRunRange } from './lambda/rangeResolver';
 import { buildTasksForMeeting } from './lambda/taskBuilder';
+import { TaskRepository } from '@DynamoDB/tasks';
 
 if (!process.env.GEMINI_MAX_INPUT_TOKEN) {
   throw new Error('GEMINI_MAX_INPUT_TOKEN is not set');
@@ -34,6 +33,7 @@ const s3 = new S3Client({
   region: awsRegion,
   ...(awsEndpoint ? { endpoint: awsEndpoint, forcePathStyle: true } : {}),
 });
+const taskRepo = new TaskRepository();
 
 const nationalDietApiEndpoint = process.env.NATIONAL_DIET_API_ENDPOINT || 'https://kokkai.ndl.go.jp/api/meeting';
 
@@ -86,14 +86,22 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         countTokens,
       });
 
-      if (!tasks.length) {
+      if (!tasks.mapTasks.length) {
         continue;
       }
 
-      await enqueuePromptsWithS3Batch({
-        items: tasks,
-        queueUrl: process.env.PROMPT_QUEUE_URL,
-      });
+      await taskRepo.putMapTasks(tasks.mapTasks);
+      if (tasks.reduceTask) {
+        try {
+          await taskRepo.putReduceTask(tasks.reduceTask);
+        } catch (error: any) {
+          if (error?.name === 'ConditionalCheckFailedException') {
+            console.log(`[Meeting ${meeting.issueID}] Reduce task already exists; skipping creation.`);
+          } else {
+            throw error;
+          }
+        }
+      }
     }
 
     return resJson(200, { message: 'Event processed.' });

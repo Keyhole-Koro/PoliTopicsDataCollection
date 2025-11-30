@@ -14,6 +14,7 @@
     "baseUrl": "./src",                    // Base URL for module resolution
     "paths": {         // Optional: For aliasing paths (e.g., "@/components")
       "@interfaces/*": ["interfaces/*"],
+      "@DynamoDB/*": ["DynamoDB/*"],
       "@DynamoDBHandler/*": ["DynamoDBHandler/*"],
       "@LLMSummarize/*": ["LLMSummarize/*"],
       "@NationalDietAPI/*": ["NationalDietAPI/*"],
@@ -21,7 +22,6 @@
       "@llm/*": ["llm/*"],
       "@services/*": ["services/*"],
       "@S3/*": ["S3/*"],
-      "@SQS/*": ["SQS/*"],
       "@prompts/*": ["prompts/*"],
       "@utils/*": ["utils/*"]
     },

@@ -1,6 +1,6 @@
 # Terraform + LocalStack Quickstart
 
-Deploy the complete PoliTopics stack into LocalStack with Terraform to exercise the Lambda, SQS, S3, and DynamoDB workflows end-to-end (the previous `src/local_invoke.ts` helper is gone). Stage/production instructions live elsewhere—this document is purely for the local workflow.
+Deploy the complete PoliTopics stack into LocalStack with Terraform to exercise the Lambda, S3, and DynamoDB task workflows end-to-end (the previous `src/local_invoke.ts` helper is gone). Stage/production instructions live elsewhere—this document is purely for the local workflow.
 
 ## Prerequisites
 
@@ -62,7 +62,7 @@ unset TF_VAR_secret_environment_variables
 
    Saving to `tfplan` keeps the apply reproducible.
 
-   > LocalStack's community image still lacks API Gateway v2 HTTP API emulation. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally. You'll still get the Lambda + SQS + S3 stack, and you can re-enable the HTTP API when targeting AWS or LocalStack Pro.
+   > LocalStack's community image still lacks API Gateway v2 HTTP API emulation. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally. You'll still get the Lambda + S3 + DynamoDB stack, and you can re-enable the HTTP API when targeting AWS or LocalStack Pro.
 
 5. **Apply the planned changes**:
 

@@ -14,7 +14,7 @@ module "service" {
   service_name                 = var.service_name
   prompt_bucket_name           = var.prompt_bucket_name
   error_bucket_name            = var.error_bucket_name
-  prompt_queue_name            = var.prompt_queue_name
+  llm_task_table_name          = var.llm_task_table_name
   lambda_memory_mb             = var.lambda_memory_mb
   lambda_timeout_sec           = var.lambda_timeout_sec
   environment_variables        = var.environment_variables
@@ -23,9 +23,6 @@ module "service" {
   tags                         = var.tags
   lambda_package_dir           = local.lambda_package_dir
   lambda_package_output_path   = local.lambda_package_output_path
-  create_prompt_queue          = var.create_prompt_queue
-  existing_prompt_queue_url    = var.existing_prompt_queue_url
-  existing_prompt_queue_arn    = var.existing_prompt_queue_arn
   api_route_key                = var.api_route_key
   enable_http_api              = var.enable_http_api
 }

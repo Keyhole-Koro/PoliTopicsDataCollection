@@ -15,12 +15,6 @@ variable "error_bucket_name" {
   default = null
 }
 
-variable "prompt_queue_name" {
-  type = string
-}
-
-
-
 variable "lambda_memory_mb" {
   type = number
 }
@@ -70,17 +64,6 @@ variable "lambda_package_output_path" {
   default = null
 }
 
-variable "create_prompt_queue" {
-  type    = bool
-  default = true
-}
-
-variable "existing_prompt_queue_url" {
-  type    = string
-  default = null
-}
-
-variable "existing_prompt_queue_arn" {
-  type    = string
-  default = null
+variable "llm_task_table_name" {
+  type = string
 }

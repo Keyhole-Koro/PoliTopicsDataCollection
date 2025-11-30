@@ -18,7 +18,7 @@ services:
     ports:
       - "4666:4566"
     environment:
-      - SERVICES=s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway,logs
+      - SERVICES=s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway,logs,dynamodb
       - DEBUG=0
       - LS_LOG=warning
       - AWS_DEFAULT_REGION=ap-northeast-3
@@ -26,6 +26,18 @@ services:
     volumes:
       - "localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    depends_on:
+      - localstack
+    ports:
+      - "8002:8001"
+    environment:
+      - AWS_REGION=ap-northeast-3
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - DYNAMO_ENDPOINT=http://localstack:4566
 
 volumes:
   localstack_data:
