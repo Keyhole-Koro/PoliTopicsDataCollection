@@ -106,9 +106,9 @@ Cloud logs flow to CloudWatch in AWS or to your LocalStack logging output during
 
 ## Prompt Chunk Aggregation
 
-- Chunks are stored at `prompt-chunks/<aggregateId>/part-XXXX.json` with metadata describing the total part count, index, run identifier, and speech IDs.
-- Each chunk results in a `map` task item inside the DynamoDB table (`pk = issueID`, `sk = MAP#<chunkIndex>`). Tasks stay `pending` until processed and marked `succeeded`.
-- When every map task for an issue completes, the reducer inserts a `REDUCE` task pointing to the relevant chunk outputs so downstream workers can rebuild the full meeting transcript.
+- Chunk prompts are written to `s3://politopics-prompts/prompts/<issueId>_<chunk-indices>.json` and tracked inside the DynamoDB record for that issue.
+- Each DynamoDB record (`pk = issueID`) contains a `chunks[]` array describing every chunk’s prompt key, result location, and readiness (`notReady` or `ready`).
+- Workers read pending records, process the first `notReady` chunk, update its status, and once all chunks are `ready` they can execute the final reduce step using the `prompt_url` metadata on the same record.
 
 ## Troubleshooting
 

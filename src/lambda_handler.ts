@@ -73,7 +73,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
     }
 
     for (const meeting of meetings) {
-      const tasks = await buildTasksForMeeting({
+      const issueTask = await buildTasksForMeeting({
         meeting,
         chunkPromptTemplate,
         reducePromptTemplate,
@@ -86,20 +86,17 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         countTokens,
       });
 
-      if (!tasks.mapTasks.length) {
+      if (!issueTask) {
         continue;
       }
 
-      await taskRepo.putMapTasks(tasks.mapTasks);
-      if (tasks.reduceTask) {
-        try {
-          await taskRepo.putReduceTask(tasks.reduceTask);
-        } catch (error: any) {
-          if (error?.name === 'ConditionalCheckFailedException') {
-            console.log(`[Meeting ${meeting.issueID}] Reduce task already exists; skipping creation.`);
-          } else {
-            throw error;
-          }
+      try {
+        await taskRepo.createTask(issueTask);
+      } catch (error: any) {
+        if (error?.name === 'ConditionalCheckFailedException') {
+          console.log(`[Meeting ${meeting.issueID}] Task already exists; skipping creation.`);
+        } else {
+          throw error;
         }
       }
     }

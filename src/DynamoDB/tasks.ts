@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  BatchWriteCommand,
   DynamoDBDocumentClient,
+  GetCommand,
   PutCommand,
   QueryCommand,
   UpdateCommand,
@@ -13,27 +13,10 @@ const STATUS_INDEX = 'StatusIndex';
 const DEFAULT_TABLE_NAME = process.env.LLM_TASK_TABLE || 'PoliTopics-llm-tasks';
 
 const nowIso = (): string => new Date().toISOString();
+
 export type TaskStatus = 'pending' | 'succeeded';
-export type TaskType = 'map' | 'reduce';
-
-export type TaskBase = {
-  pk: string; // issueID
-  sk: string; // MAP#<n> or REDUCE
-  type: TaskType;
-  status: TaskStatus;
-  llm: string;
-  llmModel: string;
-  retryAttempts: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type MapTaskItem = TaskBase & {
-  type: 'map';
-  sk: `MAP#${number}`;
-  url: string;
-  result_url: string;
-};
+export type ChunkStatus = 'notReady' | 'ready';
+export type ReduceProcessingMode = 'direct' | 'chunked';
 
 export type Meeting = {
   issueID: string;
@@ -43,13 +26,27 @@ export type Meeting = {
   numberOfSpeeches: number;
 };
 
-export type ReduceTaskItem = TaskBase & {
-  type: 'reduce';
-  sk: 'REDUCE';
-  chunk_result_urls: string[];
-  prompt: string;
+export type ChunkItem = {
+  id: string;
+  prompt_key: string;
+  prompt_url: string;
+  result_url: string;
+  status: ChunkStatus;
+};
+
+export type IssueTask = {
+  pk: string; // issueID
+  status: TaskStatus;
+  llm: string;
+  llmModel: string;
+  retryAttempts: number;
+  createdAt: string;
+  updatedAt: string;
+  processingMode: ReduceProcessingMode;
+  prompt_url: string;
   meeting: Meeting;
   result_url: string;
+  chunks: ChunkItem[];
 };
 
 function createDocumentClient(): DynamoDBDocumentClient {
@@ -69,39 +66,15 @@ export class TaskRepository {
     this.docClient = opts.client || createDocumentClient();
   }
 
-  async putMapTasks(items: MapTaskItem[]): Promise<void> {
-    if (!items.length) return;
-    const chunks: MapTaskItem[][] = [];
-
-    items.forEach((item, idx) => {
-      const chunkIndex = Math.floor(idx / 25);
-      chunks[chunkIndex] = chunks[chunkIndex] || [];
-      chunks[chunkIndex].push(item);
-    });
-
-    for (const chunk of chunks) {
-      const requestItems = chunk.map((item) => ({
-        PutRequest: {
-          Item: item,
-        },
-      }));
-      await this.docClient.send(new BatchWriteCommand({
-        RequestItems: {
-          [this.tableName]: requestItems,
-        },
-      }));
-    }
-  }
-
-  async putReduceTask(item: ReduceTaskItem): Promise<void> {
+  async createTask(task: IssueTask): Promise<void> {
     await this.docClient.send(new PutCommand({
       TableName: this.tableName,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(sk)',
+      Item: task,
+      ConditionExpression: 'attribute_not_exists(pk)',
     }));
   }
 
-  async getNextPending(limit = 1): Promise<TaskBase[]> {
+  async getNextPending(limit = 1): Promise<IssueTask[]> {
     const res = await this.docClient.send(new QueryCommand({
       TableName: this.tableName,
       IndexName: STATUS_INDEX,
@@ -109,50 +82,66 @@ export class TaskRepository {
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':pending': 'pending' },
       Limit: limit,
-      ScanIndexForward: true, // oldest first
+      ScanIndexForward: true,
     }));
-    return (res.Items as TaskBase[]) || [];
+    return (res.Items as IssueTask[]) || [];
   }
 
-  async markTaskSucceeded(issueID: string, sortKey: string): Promise<TaskBase | undefined> {
-    const updatedAt = nowIso();
+  async getTask(issueID: string): Promise<IssueTask | undefined> {
+    const res = await this.docClient.send(new GetCommand({
+      TableName: this.tableName,
+      Key: { pk: issueID },
+    }));
+    return res.Item as IssueTask | undefined;
+  }
+
+  async markChunkReady(issueID: string, chunkId: string): Promise<IssueTask | undefined> {
+    const task = await this.getTask(issueID);
+    if (!task?.chunks?.length) {
+      return task;
+    }
+
+    let changed = false;
+    const nextChunks = task.chunks.map((chunk) => {
+      if (chunk.id !== chunkId) {
+        return chunk;
+      }
+      if (chunk.status === 'ready') {
+        return chunk;
+      }
+      changed = true;
+      return { ...chunk, status: 'ready' };
+    });
+
+    if (!changed) {
+      return task;
+    }
+
     const res = await this.docClient.send(new UpdateCommand({
       TableName: this.tableName,
-      Key: { pk: issueID, sk: sortKey },
-      UpdateExpression: 'SET #status = :s, updatedAt = :u',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':s': 'succeeded', ':u': updatedAt },
-      ConditionExpression: 'attribute_exists(pk) AND attribute_exists(sk)',
+      Key: { pk: issueID },
+      UpdateExpression: 'SET chunks = :chunks, updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':chunks': nextChunks,
+        ':updatedAt': nowIso(),
+      },
       ReturnValues: 'ALL_NEW',
     }));
-    return res.Attributes as TaskBase | undefined;
+    return res.Attributes as IssueTask | undefined;
   }
 
-  async countPendingMaps(issueID: string): Promise<number> {
-    const res = await this.docClient.send(new QueryCommand({
+  async markTaskSucceeded(issueID: string): Promise<IssueTask | undefined> {
+    const res = await this.docClient.send(new UpdateCommand({
       TableName: this.tableName,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :mapPrefix)',
-      ExpressionAttributeValues: { ':pk': issueID, ':mapPrefix': 'MAP#', ':pending': 'pending' },
-      FilterExpression: '#status = :pending',
+      Key: { pk: issueID },
+      UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
       ExpressionAttributeNames: { '#status': 'status' },
-      Select: 'COUNT',
+      ExpressionAttributeValues: {
+        ':status': 'succeeded',
+        ':updatedAt': nowIso(),
+      },
+      ReturnValues: 'ALL_NEW',
     }));
-    return res.Count || 0;
-  }
-
-  async ensureReduceWhenMapsDone(args: { issueID: string; reduce: ReduceTaskItem }): Promise<boolean> {
-    const pendingMaps = await this.countPendingMaps(args.issueID);
-    if (pendingMaps > 0) {
-      return false;
-    }
-    try {
-      await this.putReduceTask(args.reduce);
-      return true;
-    } catch (error: any) {
-      if (error?.name === 'ConditionalCheckFailedException') {
-        return false;
-      }
-      throw error;
-    }
+    return res.Attributes as IssueTask | undefined;
   }
 }

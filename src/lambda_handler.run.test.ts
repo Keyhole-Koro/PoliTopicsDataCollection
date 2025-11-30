@@ -2,13 +2,11 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
 
-const putMapTasksMock = jest.fn();
-const putReduceTaskMock = jest.fn();
+const createTaskMock = jest.fn();
 
 jest.doMock('@DynamoDB/tasks', () => ({
   TaskRepository: jest.fn().mockImplementation(() => ({
-    putMapTasks: putMapTasksMock,
-    putReduceTask: putReduceTaskMock,
+    createTask: createTaskMock,
   })),
 }));
 
@@ -45,8 +43,7 @@ describe('lambda_handler run endpoint', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-    putMapTasksMock.mockReset();
-    putReduceTaskMock.mockReset();
+    createTaskMock.mockReset();
     process.env = { ...ORIGINAL_ENV };
   });
 
@@ -88,13 +85,11 @@ describe('lambda_handler run endpoint', () => {
       }),
     } as Response);
 
-    const putMapTasksMock = jest.fn().mockResolvedValue(undefined);
-    const putReduceTaskMock = jest.fn().mockResolvedValue(undefined);
+    const createTaskMock = jest.fn().mockResolvedValue(undefined);
 
     jest.doMock('@DynamoDB/tasks', () => ({
       TaskRepository: jest.fn().mockImplementation(() => ({
-        putMapTasks: putMapTasksMock,
-        putReduceTask: putReduceTaskMock,
+        createTask: createTaskMock,
       })),
     }));
 
@@ -110,8 +105,7 @@ describe('lambda_handler run endpoint', () => {
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body as string)).toEqual({ message: 'No meetings found for the specified range.' });
       expect(fetchMock).toHaveBeenCalled();
-      expect(putMapTasksMock).not.toHaveBeenCalled();
-      expect(putReduceTaskMock).not.toHaveBeenCalled();
+      expect(createTaskMock).not.toHaveBeenCalled();
     });
 
     fetchMock.mockRestore();

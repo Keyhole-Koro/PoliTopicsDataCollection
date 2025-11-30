@@ -80,8 +80,7 @@ describe('lambda_handler integration with mocked external APIs', () => {
     process.env.GEMINI_API_KEY = 'fake-key';
     process.env.RUN_API_KEY = 'secret';
     const putJsonS3Mock = jest.fn().mockResolvedValue(undefined);
-    const putMapTasksMock = jest.fn().mockResolvedValue(undefined);
-    const putReduceTaskMock = jest.fn().mockResolvedValue(undefined);
+    const createTaskMock = jest.fn().mockResolvedValue(undefined);
 
     jest.doMock('@S3/s3', () => ({
       putJsonS3: putJsonS3Mock,
@@ -90,8 +89,7 @@ describe('lambda_handler integration with mocked external APIs', () => {
 
     jest.doMock('@DynamoDB/tasks', () => ({
       TaskRepository: jest.fn().mockImplementation(() => ({
-        putMapTasks: putMapTasksMock,
-        putReduceTask: putReduceTaskMock,
+        createTask: createTaskMock,
       })),
     }));
 
@@ -129,19 +127,24 @@ describe('lambda_handler integration with mocked external APIs', () => {
       const response = await handler(event, {} as any, () => undefined);
 
       expect(response.statusCode).toBe(200);
-      expect(putJsonS3Mock).toHaveBeenCalled();
-      expect(putMapTasksMock).toHaveBeenCalled();
-      expect(putReduceTaskMock).toHaveBeenCalled();
+      expect(createTaskMock).toHaveBeenCalled();
 
-      const queuedItems = putMapTasksMock.mock.calls[0][0];
-      expect(queuedItems).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ type: 'map' }),
-        ])
-      );
+      const task = createTaskMock.mock.calls[0][0];
+      expect(task).toEqual(expect.objectContaining({ pk: 'MTG-001', status: 'pending' }));
+      expect(task.prompt_url).toMatch(/^s3:\/\/politopics-prompts\/prompts\//);
+      expect(['direct', 'chunked']).toContain(task.processingMode);
 
-      const reduceItem = putReduceTaskMock.mock.calls[0][0];
-      expect(reduceItem).toEqual(expect.objectContaining({ type: 'reduce', pk: 'MTG-001' }));
+      const reducePromptCalls = putJsonS3Mock.mock.calls.filter((call) => call[0]?.key?.includes('/reduce/'));
+      expect(reducePromptCalls.length).toBeGreaterThan(0);
+
+      if (task.processingMode === 'chunked') {
+        const chunkPrompts = putJsonS3Mock.mock.calls.filter((call) => call[0]?.key?.startsWith('prompts/MTG-001_'));
+        expect(chunkPrompts.length).toBeGreaterThan(0);
+        expect(task.chunks.length).toBeGreaterThan(0);
+        expect(task.chunks.every((chunk: any) => chunk.status === 'notReady')).toBe(true);
+      } else {
+        expect(task.chunks.length).toBe(0);
+      }
     });
 
     (global.fetch as jest.Mock | undefined)?.mockRestore();

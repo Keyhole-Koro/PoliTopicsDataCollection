@@ -13,8 +13,10 @@ import {
   DescribeTableCommand,
   DynamoDBClient,
   waitUntilTableExists,
+  waitUntilTableNotExists,
 } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import type { KeySchemaElement, TableDescription } from '@aws-sdk/client-dynamodb';
+import { BatchWriteCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -50,6 +52,83 @@ if (!LOCALSTACK_ENDPOINT) {
     const cacheFile = path.join(os.tmpdir(), 'nd-cache.json');
     const artifactsDir = path.join(process.cwd(), 'localstack-artifacts');
 
+    const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [
+      { AttributeName: 'pk', KeyType: 'HASH' },
+    ];
+    const EXPECTED_STATUS_INDEX_KEY: KeySchemaElement[] = [
+      { AttributeName: 'status', KeyType: 'HASH' },
+      { AttributeName: 'createdAt', KeyType: 'RANGE' },
+    ];
+
+    function keySchemaMatches(actual: KeySchemaElement[] | undefined, expected: KeySchemaElement[]): boolean {
+      if (!actual || actual.length !== expected.length) {
+        return false;
+      }
+      return expected.every((expectedKey) => (
+        actual.some((key) => key.AttributeName === expectedKey.AttributeName && key.KeyType === expectedKey.KeyType)
+      ));
+    }
+
+    function tableMatchesExpectedSchema(table?: TableDescription): boolean {
+      if (!table) {
+        return false;
+      }
+      if (!keySchemaMatches(table.KeySchema, EXPECTED_PRIMARY_KEY)) {
+        return false;
+      }
+      const statusIndex = (table.GlobalSecondaryIndexes || []).find((index) => index.IndexName === 'StatusIndex');
+      if (!statusIndex) {
+        return false;
+      }
+      return keySchemaMatches(statusIndex.KeySchema, EXPECTED_STATUS_INDEX_KEY);
+    }
+
+    async function createTasksTable(): Promise<void> {
+      if (!dynamo) {
+        return;
+      }
+      await dynamo.send(new CreateTableCommand({
+        TableName: tableName,
+        BillingMode: 'PAY_PER_REQUEST',
+        AttributeDefinitions: [
+          { AttributeName: 'pk', AttributeType: 'S' },
+          { AttributeName: 'status', AttributeType: 'S' },
+          { AttributeName: 'createdAt', AttributeType: 'S' },
+        ],
+        KeySchema: EXPECTED_PRIMARY_KEY,
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'StatusIndex',
+            KeySchema: EXPECTED_STATUS_INDEX_KEY,
+            Projection: { ProjectionType: 'ALL' },
+          },
+        ],
+      }));
+      await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
+    }
+
+    async function ensureTasksTable(): Promise<void> {
+      if (!dynamo) {
+        return;
+      }
+      try {
+        const describe = await dynamo.send(new DescribeTableCommand({ TableName: tableName }));
+        if (!tableMatchesExpectedSchema(describe.Table)) {
+          console.warn(`[LocalStack Integration] Table ${tableName} schema mismatch; recreating for integration test.`);
+          await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
+          await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
+          await createTasksTable();
+          tableCreatedByTest = true;
+        }
+      } catch (error: any) {
+        if (error?.name !== 'ResourceNotFoundException') {
+          throw error;
+        }
+        await createTasksTable();
+        tableCreatedByTest = true;
+      }
+    }
+
     async function emptyAndDeleteBucket(): Promise<void> {
       if (!s3) {
         return;
@@ -73,6 +152,7 @@ if (!LOCALSTACK_ENDPOINT) {
       }
       try {
         await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
+        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       } catch (error) {
         console.warn('Failed to delete LocalStack DynamoDB table:', error);
       } finally {
@@ -86,6 +166,29 @@ if (!LOCALSTACK_ENDPOINT) {
       }
       const res = await docClient.send(new ScanCommand({ TableName: tableName }));
       return res.Items || [];
+    }
+
+    async function deleteAllTasks(): Promise<void> {
+      if (!docClient) {
+        return;
+      }
+      try {
+        const existing = await docClient.send(new ScanCommand({ TableName: tableName, ProjectionExpression: 'pk' }));
+        const items = existing.Items || [];
+        if (!items.length) {
+          return;
+        }
+        for (let i = 0; i < items.length; i += 25) {
+          const batch = items.slice(i, i + 25).map((item) => ({ DeleteRequest: { Key: { pk: item.pk } } }));
+          await docClient.send(new BatchWriteCommand({
+            RequestItems: {
+              [tableName]: batch,
+            },
+          }));
+        }
+      } catch (error) {
+        console.warn('Failed to delete existing LocalStack tasks:', error);
+      }
     }
 
     beforeAll(async () => {
@@ -137,40 +240,7 @@ if (!LOCALSTACK_ENDPOINT) {
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
 
       console.log(`[LocalStack Integration] Using DynamoDB table: ${tableName}`);
-
-      try {
-        await dynamo.send(new DescribeTableCommand({ TableName: tableName }));
-      } catch (error: any) {
-        if (error?.name !== 'ResourceNotFoundException') {
-          throw error;
-        }
-        await dynamo.send(new CreateTableCommand({
-          TableName: tableName,
-          BillingMode: 'PAY_PER_REQUEST',
-          AttributeDefinitions: [
-            { AttributeName: 'pk', AttributeType: 'S' },
-            { AttributeName: 'sk', AttributeType: 'S' },
-            { AttributeName: 'status', AttributeType: 'S' },
-            { AttributeName: 'createdAt', AttributeType: 'S' },
-          ],
-          KeySchema: [
-            { AttributeName: 'pk', KeyType: 'HASH' },
-            { AttributeName: 'sk', KeyType: 'RANGE' },
-          ],
-          GlobalSecondaryIndexes: [
-            {
-              IndexName: 'StatusIndex',
-              KeySchema: [
-                { AttributeName: 'status', KeyType: 'HASH' },
-                { AttributeName: 'createdAt', KeyType: 'RANGE' },
-              ],
-              Projection: { ProjectionType: 'ALL' },
-            },
-          ],
-        }));
-        await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-        tableCreatedByTest = true;
-      }
+      await ensureTasksTable();
     }, 40000);
 
     afterAll(async () => {
@@ -242,6 +312,8 @@ if (!LOCALSTACK_ENDPOINT) {
           isBase64Encoded: false,
         } as any;
 
+        await deleteAllTasks();
+
         await jest.isolateModulesAsync(async () => {
           const { handler } = await import('./lambda_handler');
 
@@ -263,30 +335,26 @@ if (!LOCALSTACK_ENDPOINT) {
             const created = Date.parse(task.createdAt || '');
             return Number.isFinite(created) && created >= runTimestamp;
           });
-          if (!recentTasks.length) {
+      if (!recentTasks.length) {
             console.warn('No newly created DynamoDB tasks found; ensure LocalStack is running and ND range returns data.');
           }
 
-          const recentMapTasks = recentTasks.filter((task) => task.type === 'map');
-          const recentReduceTasks = recentTasks.filter((task) => task.type === 'reduce');
-          expect(recentMapTasks.length).toBeGreaterThan(0);
+          expect(recentTasks.length).toBeGreaterThan(0);
+          expect(recentTasks.every((task) => typeof task.prompt_url === 'string' && task.prompt_url.startsWith(`s3://${bucketName}/prompts/`))).toBe(true);
 
-          const mapIssueIDs = new Set(recentMapTasks.map((task) => task.pk));
-          if (!recentReduceTasks.length) {
-            const existingReduceForIssues = tasksAfterFirst.filter((task) => task.type === 'reduce' && mapIssueIDs.has(task.pk));
-            if (!existingReduceForIssues.length) {
-              console.warn('No reduce tasks found for newly created map issue IDs; they may not have been written yet.');
-            }
-            expect(existingReduceForIssues.length).toBeGreaterThan(0);
-          } else {
-            expect(recentReduceTasks.length).toBeGreaterThan(0);
+          const chunkedTasks = recentTasks.filter((task) => task.processingMode === 'chunked');
+          const directTasks = recentTasks.filter((task) => task.processingMode === 'direct');
+
+          if (chunkedTasks.length) {
+            expect(chunkedTasks.every((task) =>
+              Array.isArray(task.chunks) &&
+              task.chunks.length > 0 &&
+              task.chunks.every((chunk: any) => chunk.status === 'notReady')
+            )).toBe(true);
           }
-          expect(recentMapTasks.every((task) => typeof task.pk === 'string' && task.pk.length > 0)).toBe(true);
-          expect(recentMapTasks.every((task) => typeof task.sk === 'string' && task.sk.startsWith('MAP#'))).toBe(true);
-          expect(recentMapTasks.every((task) => typeof task.url === 'string' && task.url.startsWith(`s3://${bucketName}/prompts/`))).toBe(true);
-          expect(recentMapTasks.every((task) => typeof task.result_url === 'string' && task.result_url.startsWith(`s3://${bucketName}/results/`))).toBe(true);
-          expect(recentReduceTasks.every((task) => task.sk === 'REDUCE')).toBe(true);
-          expect(recentReduceTasks.every((task) => Array.isArray(task.chunk_result_urls) && task.chunk_result_urls.length > 0)).toBe(true);
+          if (directTasks.length) {
+            expect(directTasks.every((task) => Array.isArray(task.chunks) && task.chunks.length === 0)).toBe(true);
+          }
 
           const fetchCallsAfterFirst = fetchSpy.mock.calls.length;
 
@@ -300,10 +368,9 @@ if (!LOCALSTACK_ENDPOINT) {
           expect(fetchSpy.mock.calls.length).toBe(fetchCallsAfterFirst);
 
           const tasksAfterSecond = await fetchAllTasks();
-          const mapTasks = tasksAfterSecond.filter((task) => task.type === 'map');
-          const reduceTasks = tasksAfterSecond.filter((task) => task.type === 'reduce');
-          expect(mapTasks.length).toBeGreaterThan(0);
-          expect(reduceTasks.length).toBeGreaterThan(0);
+          expect(tasksAfterSecond.length).toBeGreaterThan(0);
+          expect(tasksAfterSecond.every((task) => typeof task.prompt_url === 'string' && task.prompt_url.startsWith(`s3://${bucketName}/prompts/`))).toBe(true);
+          expect(tasksAfterSecond.every((task) => Array.isArray(task.chunks))).toBe(true);
 
           try {
             mkdirSync(artifactsDir, { recursive: true });
@@ -314,8 +381,8 @@ if (!LOCALSTACK_ENDPOINT) {
             console.warn('Failed to persist DynamoDB tasks snapshot:', error);
           }
 
-          const pendingStatuses = [...mapTasks, ...reduceTasks].filter((task) => task.status === 'pending');
-          expect(pendingStatuses.length).toBe(mapTasks.length + reduceTasks.length);
+          const pendingStatuses = tasksAfterSecond.filter((task) => task.status === 'pending');
+          expect(pendingStatuses.length).toBe(tasksAfterSecond.length);
         });
       },
       60000,

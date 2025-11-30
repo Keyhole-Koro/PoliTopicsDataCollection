@@ -12,7 +12,7 @@ import {
 } from '@utils/packing';
 
 import type { MeetingRecord } from './meetings';
-import type { MapTaskItem, ReduceTaskItem } from '@DynamoDB/tasks';
+import type { ChunkItem, IssueTask } from '@DynamoDB/tasks';
 
 const collectSpeechesByIndex = (speeches: RawSpeechRecord[], indices: number[]): RawSpeechRecord[] => (
   indices
@@ -33,7 +33,7 @@ export async function buildTasksForMeeting(args: {
   s3: S3Client;
   runId: string;
   countTokens: CountFn;
-}): Promise<{ mapTasks: MapTaskItem[]; reduceTask?: ReduceTaskItem }> {
+}): Promise<IssueTask | undefined> {
   const {
     meeting,
     chunkPromptTemplate,
@@ -53,7 +53,7 @@ export async function buildTasksForMeeting(args: {
       date: meeting.date,
       nameOfMeeting: meeting.nameOfMeeting,
     });
-    return { mapTasks: [] };
+    return undefined;
   }
 
   const meetingName = meeting.nameOfMeeting?.trim() || 'Unknown meeting';
@@ -61,10 +61,9 @@ export async function buildTasksForMeeting(args: {
   const meetingDate = meeting.date?.trim() || '';
 
   const speeches: RawSpeechRecord[] = meeting.speechRecord ?? [];
-
   if (!speeches.length) {
     console.log(`[Meeting ${meetingIssueID}] No speeches available; skipping.`);
-    return { mapTasks: [] };
+    return undefined;
   }
 
   const orderLens: OrderLen[] = await buildOrderLenByTokens({ speeches, countFn: countTokens });
@@ -72,14 +71,63 @@ export async function buildTasksForMeeting(args: {
 
   if (!packs.length) {
     console.log(`[Meeting ${meetingIssueID}] Unable to create chunk packs within token budget; skipping.`);
-    return { mapTasks: [] };
+    return undefined;
   }
 
-  const tasks: MapTaskItem[] = [];
-  const chunkResultUrls: string[] = [];
+  const meetingInfo = {
+    issueID: meetingIssueID,
+    nameOfMeeting: meetingName,
+    nameOfHouse: meetingHouse,
+    date: meetingDate || new Date().toISOString().split('T')[0],
+    numberOfSpeeches: speeches.length,
+  };
+
+  const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;
+  const singleChunkMode = packs.length === 1 && !packs[0]?.oversized;
   const createdAt = isoNow();
 
-  let mapCounter = 0;
+  if (singleChunkMode) {
+    const pack = packs[0];
+    const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
+    const reducePromptKey = `${reducePromptKeyBase}_direct.json`;
+    const reducePromptPayload = {
+      mode: 'direct',
+      chunkPromptTemplate,
+      reducePromptTemplate,
+      meeting: meetingInfo,
+      range,
+      packIndices: pack.indices,
+      speechIds: pack.speech_ids,
+      speeches: chunkSpeeches,
+      runId,
+    };
+    await putJsonS3({
+      s3,
+      bucket,
+      key: reducePromptKey,
+      body: reducePromptPayload,
+    });
+
+    const task: IssueTask = {
+      pk: meetingIssueID,
+      status: 'pending',
+      llm: 'gemini',
+      llmModel: geminiModel,
+      retryAttempts: 0,
+      createdAt,
+      updatedAt: createdAt,
+      processingMode: 'direct',
+      prompt_url: `s3://${bucket}/${reducePromptKey}`,
+      meeting: meetingInfo,
+      result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
+      chunks: [],
+    };
+    return task;
+  }
+
+  const chunks: ChunkItem[] = [];
+
+  let chunkCounter = 0;
   for (const pack of packs) {
     const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
     const s3key = `prompts/${meetingIssueID}_${pack.indices.join('-')}.json`;
@@ -104,45 +152,51 @@ export async function buildTasksForMeeting(args: {
       continue;
     }
 
-    chunkResultUrls.push(resultS3Url);
-
-    tasks.push({
-      pk: meetingIssueID,
-      sk: `MAP#${mapCounter}`,
-      type: 'map',
-      status: 'pending',
-      llm: 'gemini',
-      llmModel: geminiModel,
-      retryAttempts: 0,
-      createdAt,
-      updatedAt: createdAt,
-      url: s3Url,
+    chunks.push({
+      id: `CHUNK#${chunkCounter}`,
+      prompt_key: s3key,
+      prompt_url: s3Url,
       result_url: resultS3Url,
+      status: 'notReady',
     });
-    mapCounter += 1;
+    chunkCounter += 1;
   }
 
-  const reduceTask: ReduceTaskItem = {
+  if (!chunks.length) {
+    console.warn(`[Meeting ${meetingIssueID}] Failed to create chunk prompts; skipping.`);
+    return undefined;
+  }
+
+  const reducePromptKey = `${reducePromptKeyBase}.json`;
+  await putJsonS3({
+    s3,
+    bucket,
+    key: reducePromptKey,
+    body: {
+      mode: 'chunked',
+      reducePromptTemplate,
+      meeting: meetingInfo,
+      range,
+      chunks,
+      chunkResultUrls: chunks.map((chunk) => chunk.result_url),
+      runId,
+    },
+  });
+
+  const task: IssueTask = {
     pk: meetingIssueID,
-    sk: 'REDUCE',
-    type: 'reduce',
     status: 'pending',
     llm: 'gemini',
     llmModel: geminiModel,
     retryAttempts: 0,
     createdAt,
     updatedAt: createdAt,
-    chunk_result_urls: chunkResultUrls,
-    prompt: reducePromptTemplate,
-    meeting: {
-      issueID: meetingIssueID,
-      nameOfMeeting: meetingName,
-      nameOfHouse: meetingHouse,
-      date: meetingDate || new Date().toISOString().split('T')[0],
-      numberOfSpeeches: speeches.length,
-    },
+    processingMode: 'chunked',
+    prompt_url: `s3://${bucket}/${reducePromptKey}`,
+    meeting: meetingInfo,
     result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
+    chunks,
   };
 
-  return { mapTasks: tasks, reduceTask };
+  return task;
 }

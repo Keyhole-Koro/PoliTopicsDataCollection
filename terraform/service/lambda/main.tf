@@ -29,7 +29,7 @@ resource "aws_iam_policy" "dynamodb_tasks" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["dynamodb:PutItem", "dynamodb:BatchWriteItem", "dynamodb:UpdateItem", "dynamodb:GetItem", "dynamodb:Query"]
+        Action   = ["dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:GetItem", "dynamodb:Query"]
         Resource = [
           var.task_table_arn,
           "${var.task_table_arn}/index/*"
