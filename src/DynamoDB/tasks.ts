@@ -14,7 +14,7 @@ const DEFAULT_TABLE_NAME = process.env.LLM_TASK_TABLE || 'PoliTopics-llm-tasks';
 
 const nowIso = (): string => new Date().toISOString();
 
-export type TaskStatus = 'pending' | 'succeeded';
+export type TaskStatus = 'pending' | 'completed';
 export type ChunkStatus = 'notReady' | 'ready';
 export type ReduceProcessingMode = 'direct' | 'chunked';
 
@@ -137,7 +137,7 @@ export class TaskRepository {
       UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
-        ':status': 'succeeded',
+        ':status': 'completed',
         ':updatedAt': nowIso(),
       },
       ReturnValues: 'ALL_NEW',

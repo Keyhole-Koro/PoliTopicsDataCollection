@@ -127,7 +127,7 @@ if (!LOCALSTACK_ENDPOINT) {
       await repository.createTask(createIssueTask({ issueID, chunkCount: 0 }));
 
       const result = await repository.markTaskSucceeded(issueID);
-      expect(result?.status).toBe('succeeded');
+      expect(result?.status).toBe('completed');
     }, 20000);
   });
 }

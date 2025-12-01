@@ -179,11 +179,10 @@ if (!LOCALSTACK_ENDPOINT) {
       expect(chunkReady?.chunks[0].status).toBe('ready');
 
       await repository.markTaskSucceeded(issueID);
-      const succeeded = await repository.getTask(issueID);
-      expect(succeeded?.status).toBe('succeeded');
+    const succeeded = await repository.getTask(issueID);
+    expect(succeeded?.status).toBe('completed');
 
       console.log(`[LocalStack Chunk Test] Inserted task ${issueID} with ${chunkCount} chunks into ${TABLE_NAME}.`);
     }, 30000);
   });
 }
-
