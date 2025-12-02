@@ -62,7 +62,7 @@ unset TF_VAR_secret_environment_variables
 
    Saving to `tfplan` keeps the apply reproducible.
 
-   > LocalStack's community image still lacks API Gateway v2 HTTP API emulation. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally. You'll still get the Lambda + S3 + DynamoDB stack, and you can re-enable the HTTP API when targeting AWS or LocalStack Pro.
+> LocalStack's community image still lacks API Gateway v2 HTTP API emulation. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false`, so Terraform skips the API Gateway resources locally. Use LocalStack Pro or AWS to deploy the HTTP API.
 
 5. **Apply the planned changes**:
 

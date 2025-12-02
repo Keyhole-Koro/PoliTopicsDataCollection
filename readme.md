@@ -67,7 +67,7 @@ The old `npm run dev` helper that invoked the Lambda directly has been removed. 
    terraform -chdir=./terraform apply -var-file=tfvars/localstack.tfvars
    ```
 
-   > LocalStack's community image still doesn't emulate API Gateway v2 HTTP APIs, so the `tfvars/localstack.tfvars` profile sets `enable_http_api = false`. Terraform will deploy Lambda/S3/DynamoDB/EventBridge locally; switch the flag back on when targeting AWS or LocalStack Pro.
+  > LocalStack's community image still doesn't emulate API Gateway v2 HTTP APIs. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally; use LocalStack Pro or AWS when you need the HTTP API.
 
 4. (Optional) When the HTTP API is enabled, fetch the endpoint and call it with the configured API key:
    ```bash

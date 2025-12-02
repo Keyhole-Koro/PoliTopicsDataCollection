@@ -11,8 +11,7 @@ variable "prompt_bucket_name" {
 }
 
 variable "error_bucket_name" {
-  type    = string
-  default = null
+  type = string
 }
 
 variable "lambda_memory_mb" {
@@ -49,11 +48,6 @@ variable "api_route_key" {
   default = "POST /run"
 }
 
-variable "enable_http_api" {
-  type    = bool
-  default = true
-}
-
 variable "lambda_package_dir" {
   type    = string
   default = null
@@ -66,4 +60,9 @@ variable "lambda_package_output_path" {
 
 variable "llm_task_table_name" {
   type = string
+}
+
+variable "enable_http_api" {
+  type    = bool
+  default = true
 }

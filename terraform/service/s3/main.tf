@@ -29,19 +29,13 @@ resource "aws_s3_bucket_public_access_block" "prompt" {
   restrict_public_buckets = true
 }
 
-locals {
-  create_error_bucket = var.error_bucket_name != null && trimspace(var.error_bucket_name) != ""
-}
-
 resource "aws_s3_bucket" "error" {
-  count  = local.create_error_bucket ? 1 : 0
   bucket = var.error_bucket_name
   tags   = var.tags
 }
 
 resource "aws_s3_bucket_public_access_block" "error" {
-  count  = local.create_error_bucket ? 1 : 0
-  bucket = aws_s3_bucket.error[0].id
+  bucket = aws_s3_bucket.error.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -54,6 +48,5 @@ output "prompt_bucket" {
 }
 
 output "error_bucket" {
-  value = local.create_error_bucket ? aws_s3_bucket.error[0].bucket : null
+  value = aws_s3_bucket.error.bucket
 }
-

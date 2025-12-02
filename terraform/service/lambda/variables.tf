@@ -47,11 +47,6 @@ variable "api_route_key" {
   default = "POST /run"
 }
 
-variable "enable_http_api" {
-  type    = bool
-  default = true
-}
-
 variable "tags" {
   type    = map(string)
   default = {}
@@ -65,4 +60,9 @@ variable "package_source_dir" {
 variable "package_output_path" {
   type    = string
   default = null
+}
+
+variable "enable_http_api" {
+  type    = bool
+  default = true
 }
