@@ -21,6 +21,7 @@ src/**/*.json
 
 terraform.tfstate
 terraform.tfstate.backup
+*.backup
 tfplan
 
 # contains logs instead of s3 in local development

@@ -58,8 +58,6 @@ variable "tags" {
   default     = {}
 }
 
-
-
 variable "api_route_key" {
   description = "HTTP API route key (e.g. POST /run)"
   type        = string

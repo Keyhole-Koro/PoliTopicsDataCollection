@@ -38,17 +38,17 @@ Provide these via `.env`, your shell, or the AWS Lambda configuration.
 
 Start LocalStack and DynamoDB admin:
 
-   ```bash
-   npm run local:up
-   ```
+```bash
+npm run local:up
+```
 
-   > The bundled `docker-compose.yml` sets `LAMBDA_EXECUTOR=local` so LocalStack can run Lambda functions without needing nested Docker access. Keep that config (or expose a working Docker socket) if you customise the stack; otherwise Lambda creation will fail during Terraform applies.
+> The bundled `docker-compose.yml` sets `LAMBDA_EXECUTOR=local` so LocalStack can run Lambda functions without needing nested Docker access. Keep that config (or expose a working Docker socket) if you customise the stack; otherwise Lambda creation will fail during Terraform applies.
 
 Bootstrap LocalStack buckets and tables:
 
-   ```bash
+```bash
 npm run local:bootstrap
-   ```
+```
 
 Set `AWS_ENDPOINT_URL=http://localhost:4566` (or your LocalStack endpoint) so all AWS SDK clients target LocalStack. The helper in `src/utils/aws.ts` automatically forwards the endpoint to all clients.
 
@@ -67,7 +67,7 @@ The old `npm run dev` helper that invoked the Lambda directly has been removed. 
    terraform -chdir=./terraform apply -var-file=tfvars/localstack.tfvars
    ```
 
-  > LocalStack's community image still doesn't emulate API Gateway v2 HTTP APIs. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally; use LocalStack Pro or AWS when you need the HTTP API.
+> LocalStack's community image still doesn't emulate API Gateway v2 HTTP APIs. The `tfvars/localstack.tfvars` profile sets `enable_http_api = false` so Terraform skips those resources locally; use LocalStack Pro or AWS when you need the HTTP API.
 
 4. (Optional) When the HTTP API is enabled, fetch the endpoint and call it with the configured API key:
    ```bash
@@ -87,6 +87,19 @@ Jest is configured through `jest.config.js` with path aliases for the `src/` tre
   - Utility tests: `npm test -- src/utils/rateLimit.test.ts`
 - Lambda integration with mocked external APIs: `npm test -- lambda_handler.mock.test.ts`
 - `/run` handler contract tests: `npm test -- lambda_handler.run.test.ts`
+
+## Create state bucket
+
+```bash
+./create-state-bucket.sh stage
+./create-state-bucket.sh production
+```
+
+## Import manually
+
+```bash
+./import_all.sh tfvars/stage.tfvars
+```
 
 ## Observability
 
