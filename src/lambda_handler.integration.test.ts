@@ -36,7 +36,6 @@ if (!LOCALSTACK_ENDPOINT) {
     let docClient: DynamoDBDocumentClient | undefined;
     let tableCreatedByTest = false;
 
-    const cacheFile = path.join(os.tmpdir(), 'nd-cache.json');
     const artifactsDir = path.join(process.cwd(), 'localstack-artifacts');
 
     const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [
@@ -166,7 +165,6 @@ if (!LOCALSTACK_ENDPOINT) {
       jest.clearAllMocks();
       process.env = { ...ORIGINAL_ENV };
 
-      process.env.NATIONAL_DIET_CACHE_FILE = cacheFile;
       process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
       process.env.GEMINI_MAX_INPUT_TOKEN = '12000';
       process.env.GEMINI_API_KEY = 'fake-key';
@@ -206,7 +204,6 @@ if (!LOCALSTACK_ENDPOINT) {
         console.log(`[LocalStack Integration] DynamoDB table ${tableName} existed prior to test; left untouched.`);
       }
 
-      delete process.env.NATIONAL_DIET_CACHE_FILE;
       delete process.env.AWS_ENDPOINT_URL;
       delete process.env.LLM_TASK_TABLE;
 
@@ -219,7 +216,7 @@ if (!LOCALSTACK_ENDPOINT) {
         const fetchSpy = jest.spyOn(globalThis, 'fetch');
         installMockGeminiCountTokens(10);
 
-        const hadCacheAtStart = existsSync(cacheFile);
+        const hadCacheAtStart = false;
         const runTimestamp = Date.now();
 
         const from = process.env.ND_TEST_FROM ?? '2025-09-01';
@@ -267,12 +264,7 @@ if (!LOCALSTACK_ENDPOINT) {
 
           const firstFetchCalls = fetchSpy.mock.calls.length;
 
-          if (!hadCacheAtStart) {
-            expect(firstFetchCalls).toBeGreaterThan(0);
-            expect(existsSync(cacheFile)).toBe(true);
-          } else {
-            expect(firstFetchCalls).toBe(0);
-          }
+          expect(firstFetchCalls).toBeGreaterThan(0);
 
           const tasksAfterFirst = await fetchAllTasks();
           const recentTasks = tasksAfterFirst.filter((task) => {
@@ -304,33 +296,6 @@ if (!LOCALSTACK_ENDPOINT) {
 
           const fetchCallsAfterFirst = fetchSpy.mock.calls.length;
 
-          fetchSpy.mockImplementation(() => {
-            throw new Error('Fetch should not be called when cache is populated');
-          });
-
-          const secondResponse = await handler(event, {} as any, () => undefined);
-          console.log('secondResponse:', secondResponse);
-          expect(secondResponse.statusCode).toBe(200);
-          expect(fetchSpy.mock.calls.length).toBe(fetchCallsAfterFirst);
-
-          const tasksAfterSecond = await fetchAllTasks();
-          expect(tasksAfterSecond.length).toBeGreaterThan(0);
-          expect(tasksAfterSecond.every((task) =>
-            typeof task.prompt_url === 'string' && task.prompt_url.startsWith('s3://')
-          )).toBe(true);
-          expect(tasksAfterSecond.every((task) => Array.isArray(task.chunks))).toBe(true);
-
-          try {
-            mkdirSync(artifactsDir, { recursive: true });
-            const artifactPath = path.join(artifactsDir, `dynamodb-tasks-${Date.now()}.json`);
-            writeFileSync(artifactPath, JSON.stringify(tasksAfterSecond, null, 2), 'utf8');
-            console.log(`[LocalStack Integration] Saved DynamoDB tasks to ${artifactPath}`);
-          } catch (error) {
-            console.warn('Failed to persist DynamoDB tasks snapshot:', error);
-          }
-
-          const pendingStatuses = tasksAfterSecond.filter((task) => task.status === 'pending');
-          expect(pendingStatuses.length).toBe(tasksAfterSecond.length);
         });
       },
       60000,

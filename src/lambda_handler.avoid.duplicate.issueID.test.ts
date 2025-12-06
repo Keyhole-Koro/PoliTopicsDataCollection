@@ -150,7 +150,6 @@ if (!LOCALSTACK_ENDPOINT) {
       jest.clearAllMocks();
       process.env = { ...ORIGINAL_ENV };
 
-      process.env.NATIONAL_DIET_CACHE_FILE = '';
       process.env.NATIONAL_DIET_API_ENDPOINT = 'https://mock.ndl.go.jp/api/meeting';
       process.env.GEMINI_MAX_INPUT_TOKEN = '200';
       process.env.GEMINI_API_KEY = 'fake-key';

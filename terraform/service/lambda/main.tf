@@ -45,6 +45,39 @@ resource "aws_iam_role_policy_attachment" "dynamodb_tasks" {
 }
 
 locals {
+  prompt_bucket_arn = "arn:aws:s3:::${var.prompt_bucket}"
+  error_bucket_name = trimspace(coalesce(var.error_bucket, ""))
+  s3_write_resources = concat(
+    ["${local.prompt_bucket_arn}/*"],
+    local.error_bucket_name != "" ? ["arn:aws:s3:::${local.error_bucket_name}/*"] : [],
+  )
+  enable_s3_policy = length(local.s3_write_resources) > 0
+}
+
+resource "aws_iam_policy" "s3_write" {
+  count       = local.enable_s3_policy ? 1 : 0
+  name        = "${var.name_prefix}-s3-writes"
+  description = "Allow Lambda to write prompt and log payloads to S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = local.s3_write_resources
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "s3_write" {
+  count      = local.enable_s3_policy ? 1 : 0
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.s3_write[0].arn
+}
+
+locals {
   env_vars = merge(
     {
       PROMPT_BUCKET  = var.prompt_bucket
