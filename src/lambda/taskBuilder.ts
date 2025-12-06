@@ -1,4 +1,7 @@
+import type { S3Client } from '@aws-sdk/client-s3';
+
 import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
+import { putJsonS3 } from '@S3/s3';
 import type { RunRange } from '@utils/range';
 import {
   buildOrderLenByTokens,
@@ -25,7 +28,9 @@ export async function buildTasksForMeeting(args: {
   reducePromptTemplate: string;
   availableTokens: number;
   range: RunRange;
+  bucket: string;
   geminiModel: string;
+  s3: S3Client;
   runId: string;
   countTokens: CountFn;
 }): Promise<IssueTask | undefined> {
@@ -35,7 +40,9 @@ export async function buildTasksForMeeting(args: {
     reducePromptTemplate,
     availableTokens,
     range,
+    bucket,
     geminiModel,
+    s3,
     runId,
     countTokens,
   } = args;
@@ -75,14 +82,16 @@ export async function buildTasksForMeeting(args: {
     numberOfSpeeches: speeches.length,
   };
 
+  const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;
   const singleChunkMode = packs.length === 1 && !packs[0]?.oversized;
   const createdAt = isoNow();
 
   if (singleChunkMode) {
     const pack = packs[0];
     const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
+    const reducePromptKey = `${reducePromptKeyBase}_direct.json`;
     const reducePromptPayload = {
-      mode: 'direct' as const,
+      mode: 'direct',
       chunkPromptTemplate,
       reducePromptTemplate,
       meeting: meetingInfo,
@@ -92,6 +101,12 @@ export async function buildTasksForMeeting(args: {
       speeches: chunkSpeeches,
       runId,
     };
+    await putJsonS3({
+      s3,
+      bucket,
+      key: reducePromptKey,
+      body: reducePromptPayload,
+    });
     const task: IssueTask = {
       pk: meetingIssueID,
       status: 'pending',
@@ -101,8 +116,9 @@ export async function buildTasksForMeeting(args: {
       createdAt,
       updatedAt: createdAt,
       processingMode: 'direct',
-      prompt_payload: reducePromptPayload,
+      prompt_url: `s3://${bucket}/${reducePromptKey}`,
       meeting: meetingInfo,
+      result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
       chunks: [],
     };
     return task;
@@ -113,14 +129,33 @@ export async function buildTasksForMeeting(args: {
   let chunkCounter = 0;
   for (const pack of packs) {
     const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
+    const s3key = `prompts/${meetingIssueID}_${pack.indices.join('-')}.json`;
+    const s3Url = `s3://${bucket}/${s3key}`;
+    const resultS3Key = `results/${meetingIssueID}_${pack.indices.join('-')}_result.json`;
+    const resultS3Url = `s3://${bucket}/${resultS3Key}`;
+
+    try {
+      await putJsonS3({
+        s3,
+        bucket,
+        key: s3key,
+        body: {
+          prompt: chunkPromptTemplate,
+          speeches: chunkSpeeches,
+          speechIds: pack.speech_ids,
+          indices: pack.indices,
+        },
+      });
+    } catch (error) {
+      console.error(`[Meeting ${meetingIssueID}] Failed to write prompt payload to S3:`, error);
+      continue;
+    }
+
     chunks.push({
       id: `CHUNK#${chunkCounter}`,
-      payload: {
-        prompt: chunkPromptTemplate,
-        speeches: chunkSpeeches,
-        speechIds: pack.speech_ids,
-        indices: pack.indices,
-      },
+      prompt_key: s3key,
+      prompt_url: s3Url,
+      result_url: resultS3Url,
       status: 'notReady',
     });
     chunkCounter += 1;
@@ -131,14 +166,21 @@ export async function buildTasksForMeeting(args: {
     return undefined;
   }
 
-  const reducePromptPayload = {
-    mode: 'chunked' as const,
-    reducePromptTemplate,
-    meeting: meetingInfo,
-    range,
-    chunkIds: chunks.map((chunk) => chunk.id),
-    runId,
-  };
+  const reducePromptKey = `${reducePromptKeyBase}.json`;
+  await putJsonS3({
+    s3,
+    bucket,
+    key: reducePromptKey,
+    body: {
+      mode: 'chunked',
+      reducePromptTemplate,
+      meeting: meetingInfo,
+      range,
+      chunks,
+      chunkResultUrls: chunks.map((chunk) => chunk.result_url),
+      runId,
+    },
+  });
 
   const task: IssueTask = {
     pk: meetingIssueID,
@@ -149,8 +191,9 @@ export async function buildTasksForMeeting(args: {
     createdAt,
     updatedAt: createdAt,
     processingMode: 'chunked',
-    prompt_payload: reducePromptPayload,
+    prompt_url: `s3://${bucket}/${reducePromptKey}`,
     meeting: meetingInfo,
+    result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
     chunks,
   };
 

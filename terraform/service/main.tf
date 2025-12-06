@@ -7,13 +7,21 @@ locals {
     },
     var.tags
   )
+
+  lambda_env_vars = merge(
+    var.environment_variables,
+    {
+      PROMPT_BUCKET = var.prompt_bucket_name
+    },
+  )
 }
 
 module "buckets" {
   source = "./s3"
 
-  error_bucket_name = var.error_bucket_name
-  tags              = local.tags
+  prompt_bucket_name = var.prompt_bucket_name
+  error_bucket_name  = var.error_bucket_name
+  tags               = local.tags
 }
 
 module "tasks_table" {
@@ -29,9 +37,10 @@ module "lambda" {
   name_prefix                  = local.name_prefix
   memory_mb                    = var.lambda_memory_mb
   timeout_sec                  = var.lambda_timeout_sec
-  environment_variables        = var.environment_variables
+  environment_variables        = local.lambda_env_vars
   secret_environment_variables = var.secret_environment_variables
   api_route_key                = var.api_route_key
+  prompt_bucket                = module.buckets.prompt_bucket
   error_bucket                 = module.buckets.error_bucket
   task_table_name              = module.tasks_table.table_name
   task_table_arn               = module.tasks_table.table_arn
@@ -40,6 +49,10 @@ module "lambda" {
   package_source_dir           = var.lambda_package_dir
   package_output_path          = var.lambda_package_output_path
   enable_http_api              = var.enable_http_api
+}
+
+output "prompt_bucket_name" {
+  value = module.buckets.prompt_bucket
 }
 
 output "error_bucket_name" {

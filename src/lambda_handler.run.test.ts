@@ -56,6 +56,8 @@ describe('lambda_handler run endpoint', () => {
     process.env.RUN_API_KEY = 'secret';
     process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
     process.env.GEMINI_API_KEY = 'fake';
+    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-test';
+    process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
 
     await jest.isolateModulesAsync(async () => {
       const { handler } = await import('./lambda_handler');
@@ -71,6 +73,7 @@ describe('lambda_handler run endpoint', () => {
     process.env.RUN_API_KEY = 'secret';
     process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
     process.env.GEMINI_API_KEY = 'fake';
+    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-test';
     process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
 
     const fetchMock = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({
@@ -84,14 +87,6 @@ describe('lambda_handler run endpoint', () => {
         meetingRecord: [],
       }),
     } as Response);
-
-    const createTaskMock = jest.fn().mockResolvedValue(undefined);
-
-    jest.doMock('@DynamoDB/tasks', () => ({
-      TaskRepository: jest.fn().mockImplementation(() => ({
-        createTask: createTaskMock,
-      })),
-    }));
 
     installMockGeminiCountTokens(10);
 

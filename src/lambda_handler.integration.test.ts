@@ -28,6 +28,7 @@ if (!LOCALSTACK_ENDPOINT) {
 } else {
   describe('lambda_handler integration using the real National Diet API with LocalStack S3/DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
+    const bucketName = process.env.PROMPT_BUCKET || 'politopics-prompts';
     const configuredTable = process.env.LLM_TASK_TABLE;
     const tableName = configuredTable || 'PoliTopics-llm-tasks';
     const cleanupCreatedTable = process.env.CLEANUP_LOCALSTACK_TASK_TABLE === '1';
@@ -170,6 +171,7 @@ if (!LOCALSTACK_ENDPOINT) {
       process.env.GEMINI_MAX_INPUT_TOKEN = '12000';
       process.env.GEMINI_API_KEY = 'fake-key';
       process.env.RUN_API_KEY = 'secret';
+      process.env.PROMPT_BUCKET = bucketName;
       process.env.LOCALSTACK_URL = LOCALSTACK_ENDPOINT;
       process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
       process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
@@ -283,8 +285,7 @@ if (!LOCALSTACK_ENDPOINT) {
 
           expect(recentTasks.length).toBeGreaterThan(0);
           expect(recentTasks.every((task) =>
-            task?.prompt_payload &&
-            (task.prompt_payload.mode === 'direct' || task.prompt_payload.mode === 'chunked')
+            typeof task.prompt_url === 'string' && task.prompt_url.startsWith('s3://')
           )).toBe(true);
 
           const chunkedTasks = recentTasks.filter((task) => task.processingMode === 'chunked');
@@ -315,8 +316,7 @@ if (!LOCALSTACK_ENDPOINT) {
           const tasksAfterSecond = await fetchAllTasks();
           expect(tasksAfterSecond.length).toBeGreaterThan(0);
           expect(tasksAfterSecond.every((task) =>
-            task?.prompt_payload &&
-            (task.prompt_payload.mode === 'direct' || task.prompt_payload.mode === 'chunked')
+            typeof task.prompt_url === 'string' && task.prompt_url.startsWith('s3://')
           )).toBe(true);
           expect(tasksAfterSecond.every((task) => Array.isArray(task.chunks))).toBe(true);
 

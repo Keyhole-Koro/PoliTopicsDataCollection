@@ -6,6 +6,10 @@ variable "service_name" {
   type = string
 }
 
+variable "prompt_bucket_name" {
+  type = string
+}
+
 variable "error_bucket_name" {
   type = string
 }

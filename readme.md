@@ -1,6 +1,6 @@
 # PoliTopics-Data-Collection
 
-PoliTopics-Data-Collection is a serverless data pipeline that downloads Japanese National Diet records, breaks them into LLM-friendly prompt chunks, embeds the payloads directly inside DynamoDB tasks, and tracks fan-out task state entirely there. The codebase is written in TypeScript and targets AWS Lambda; Terraform modules define the cloud deployment and LocalStack enables a local-first workflow.
+PoliTopics-Data-Collection is a serverless data pipeline that downloads Japanese National Diet records, breaks them into LLM-friendly prompt chunks, stores the payloads in S3, and tracks fan-out task state entirely in DynamoDB. The codebase is written in TypeScript and targets AWS Lambda; Terraform modules define the cloud deployment and LocalStack enables a local-first workflow.
 
 ## Requirements
 

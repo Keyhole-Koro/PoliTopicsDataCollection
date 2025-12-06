@@ -50,6 +50,7 @@ def extract(key):
 values = {
   "SERVICE_NAME": extract("service_name"),
   "ENVIRONMENT": extract("environment"),
+  "PROMPT_BUCKET_NAME": extract("prompt_bucket_name"),
   "ERROR_BUCKET_NAME": extract("error_bucket_name"),
   "LLM_TASK_TABLE_NAME": extract("llm_task_table_name"),
   "ENABLE_HTTP_API": extract("enable_http_api") or "true",
@@ -65,7 +66,7 @@ for key, value in values.items():
 PY
 )"
 
-for required in SERVICE_NAME ENVIRONMENT LLM_TASK_TABLE_NAME AWS_REGION; do
+for required in SERVICE_NAME ENVIRONMENT PROMPT_BUCKET_NAME LLM_TASK_TABLE_NAME AWS_REGION; do
   if [[ -z "${!required:-}" ]]; then
     echo "Missing required value for $required (check $VAR_FILE)" >&2
     exit 1
@@ -114,6 +115,11 @@ run_import() {
     terraform import -var-file="$VAR_FILE" -no-color "$address" "$identifier"
   )
 }
+
+run_import "module.service.module.buckets.aws_s3_bucket.prompt" "$PROMPT_BUCKET_NAME"
+run_import "module.service.module.buckets.aws_s3_bucket_versioning.prompt" "$PROMPT_BUCKET_NAME"
+run_import "module.service.module.buckets.aws_s3_bucket_server_side_encryption_configuration.prompt" "$PROMPT_BUCKET_NAME"
+run_import "module.service.module.buckets.aws_s3_bucket_public_access_block.prompt" "$PROMPT_BUCKET_NAME"
 
 run_import "module.service.module.buckets.aws_s3_bucket.error" "$ERROR_BUCKET_NAME"
 run_import "module.service.module.buckets.aws_s3_bucket_public_access_block.error" "$ERROR_BUCKET_NAME"

@@ -41,7 +41,6 @@ const tableMatchesExpectedSchema = (table?: TableDescription): boolean => {
 
 const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
   const createdAt = new Date().toISOString();
-  const chunkIds = Array.from({ length: chunkCount }, (_, idx) => `CHUNK#${idx}`);
   return {
     pk: issueID,
     status: 'pending',
@@ -51,20 +50,7 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
     createdAt,
     updatedAt: createdAt,
     processingMode: 'chunked',
-    prompt_payload: {
-      mode: 'chunked',
-      reducePromptTemplate: 'Reduce prompt',
-      meeting: {
-        issueID,
-        nameOfMeeting: 'Chunk Test Meeting',
-        nameOfHouse: 'House',
-        date: '2025-11-30',
-        numberOfSpeeches: chunkCount,
-      },
-      range: { from: '2025-11-01', until: '2025-11-30' },
-      chunkIds,
-      runId: 'test',
-    },
+    prompt_url: `s3://politopics-prompts/prompts/${issueID}_reduce.json`,
     meeting: {
       issueID,
       nameOfMeeting: 'Chunk Test Meeting',
@@ -72,14 +58,12 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
       date: '2025-11-30',
       numberOfSpeeches: chunkCount,
     },
+    result_url: `s3://politopics-prompts/results/${issueID}_reduce.json`,
     chunks: Array.from({ length: chunkCount }, (_, idx) => ({
       id: `CHUNK#${idx}`,
-      payload: {
-        prompt: 'Chunk prompt',
-        speeches: [],
-        speechIds: [`sp-${idx}`],
-        indices: [idx],
-      },
+      prompt_key: `prompts/${issueID}_${idx}.json`,
+      prompt_url: `s3://politopics-prompts/prompts/${issueID}_${idx}.json`,
+      result_url: `s3://politopics-prompts/results/${issueID}_${idx}.json`,
       status: 'notReady' as const,
     })),
   };

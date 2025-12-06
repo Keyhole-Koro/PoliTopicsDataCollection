@@ -13,6 +13,11 @@ variable "service_name" {
   type        = string
 }
 
+variable "prompt_bucket_name" {
+  description = "S3 bucket for prompt payloads"
+  type        = string
+}
+
 variable "error_bucket_name" {
   description = "S3 bucket for error logs"
   type        = string

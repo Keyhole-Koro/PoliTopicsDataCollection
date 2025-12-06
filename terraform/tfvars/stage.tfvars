@@ -1,7 +1,8 @@
 aws_region        = "ap-northeast-3"
-environment       = "stage"
-service_name      = "politopics"
-error_bucket_name = "politopics-data-collection-errors-stage"
+environment         = "stage"
+service_name        = "politopics"
+prompt_bucket_name  = "politopics-data-collection-prompts-stage"
+error_bucket_name   = "politopics-data-collection-errors-stage"
 llm_task_table_name = "politopics-llm-tasks-stage"
 lambda_memory_mb    = 128
 lambda_timeout_sec  = 300

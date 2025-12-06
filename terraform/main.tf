@@ -12,6 +12,7 @@ module "service" {
 
   environment                  = var.environment
   service_name                 = var.service_name
+  prompt_bucket_name           = var.prompt_bucket_name
   error_bucket_name            = var.error_bucket_name
   llm_task_table_name          = var.llm_task_table_name
   lambda_memory_mb             = var.lambda_memory_mb

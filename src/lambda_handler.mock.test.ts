@@ -45,6 +45,7 @@ if (!LOCALSTACK_ENDPOINT) {
 } else {
   describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
+    const bucketName = process.env.PROMPT_BUCKET || 'politopics-prompts';
     const configuredTable = process.env.LLM_TASK_TABLE;
     const tableName = configuredTable || 'PoliTopics-llm-tasks';
     const cleanupInsertedTasks = process.env.CLEANUP_LOCALSTACK_LAMBDA_TASKS === '1';
@@ -120,6 +121,7 @@ if (!LOCALSTACK_ENDPOINT) {
       process.env.GEMINI_MAX_INPUT_TOKEN = '100';
       process.env.GEMINI_API_KEY = 'fake-key';
       process.env.RUN_API_KEY = 'secret';
+      process.env.PROMPT_BUCKET = bucketName;
       process.env.LOCALSTACK_URL = LOCALSTACK_ENDPOINT;
       process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
       process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
@@ -255,7 +257,7 @@ if (!LOCALSTACK_ENDPOINT) {
       expect(stored.Item?.processingMode).toBe('direct');
       expect(Array.isArray(stored.Item?.chunks)).toBe(true);
       expect(stored.Item?.chunks?.length ?? 0).toBe(0);
-      expect(stored.Item?.prompt_payload?.mode).toBe('direct');
+      expect(typeof stored.Item?.prompt_url).toBe('string');
 
       fetchMock.mockRestore();
     }, 60000);
@@ -339,7 +341,7 @@ if (!LOCALSTACK_ENDPOINT) {
       expect(Array.isArray(stored.Item?.chunks)).toBe(true);
       expect(stored.Item?.chunks?.length).toBeGreaterThan(0);
       expect(stored.Item?.chunks?.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')).toBe(true);
-      expect(stored.Item?.prompt_payload?.mode).toBe('chunked');
+      expect(typeof stored.Item?.prompt_url).toBe('string');
 
       fetchMock.mockRestore();
     }, 60000);
