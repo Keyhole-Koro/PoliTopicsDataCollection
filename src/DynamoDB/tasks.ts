@@ -7,6 +7,8 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 
+import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
+import type { RunRange } from '@utils/range';
 import { getAwsClientConfig } from '@utils/aws';
 
 const STATUS_INDEX = 'StatusIndex';
@@ -26,13 +28,41 @@ export type Meeting = {
   numberOfSpeeches: number;
 };
 
+export type ChunkPayload = {
+  prompt: string;
+  speeches: RawSpeechRecord[];
+  speechIds: string[];
+  indices: number[];
+};
+
 export type ChunkItem = {
   id: string;
-  prompt_key: string;
-  prompt_url: string;
-  result_url: string;
+  payload: ChunkPayload;
   status: ChunkStatus;
 };
+
+export type DirectPromptPayload = {
+  mode: 'direct';
+  chunkPromptTemplate: string;
+  reducePromptTemplate: string;
+  meeting: Meeting;
+  range: RunRange;
+  packIndices: number[];
+  speechIds: string[];
+  speeches: RawSpeechRecord[];
+  runId: string;
+};
+
+export type ChunkedPromptPayload = {
+  mode: 'chunked';
+  reducePromptTemplate: string;
+  meeting: Meeting;
+  range: RunRange;
+  chunkIds: string[];
+  runId: string;
+};
+
+export type ReducePromptPayload = DirectPromptPayload | ChunkedPromptPayload;
 
 export type IssueTask = {
   pk: string; // issueID
@@ -43,9 +73,8 @@ export type IssueTask = {
   createdAt: string;
   updatedAt: string;
   processingMode: ReduceProcessingMode;
-  prompt_url: string;
+  prompt_payload: ReducePromptPayload;
   meeting: Meeting;
-  result_url: string;
   chunks: ChunkItem[];
 };
 

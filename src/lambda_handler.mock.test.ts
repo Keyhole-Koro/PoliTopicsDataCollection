@@ -3,15 +3,6 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { RawMeetingData, RawSpeechRecord } from '@NationalDietAPI/Raw';
 
 import {
-  CreateBucketCommand,
-  DeleteBucketCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-  S3Client,
-  type BucketLocationConstraint,
-  type CreateBucketCommandInput,
-} from '@aws-sdk/client-s3';
-import {
   CreateTableCommand,
   DeleteTableCommand,
   DescribeTableCommand,
@@ -52,13 +43,11 @@ if (!LOCALSTACK_ENDPOINT) {
     });
   });
 } else {
-  describe('lambda_handler mocked ND API with LocalStack S3/DynamoDB', () => {
+  describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = 'politopics-prompts';
     const configuredTable = process.env.LLM_TASK_TABLE;
     const tableName = configuredTable || 'PoliTopics-llm-tasks';
     const cleanupInsertedTasks = process.env.CLEANUP_LOCALSTACK_LAMBDA_TASKS === '1';
-    const cleanupBucketObjects = process.env.CLEANUP_LOCALSTACK_LAMBDA_BUCKET === '1';
 
     const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
     const EXPECTED_STATUS_INDEX_KEY: KeySchemaElement[] = [
@@ -82,39 +71,8 @@ if (!LOCALSTACK_ENDPOINT) {
 
     let dynamo: DynamoDBClient;
     let docClient: DynamoDBDocumentClient;
-    let s3: S3Client;
     let tableCreatedByTest = false;
-    let bucketCreatedByTest = false;
     const insertedTasks: string[] = [];
-
-    async function ensureBucket(): Promise<void> {
-      try {
-        const region = (process.env.AWS_REGION || 'ap-northeast-3') as BucketLocationConstraint;
-        const createBucketInput: CreateBucketCommandInput = {
-          Bucket: bucketName,
-          CreateBucketConfiguration: { LocationConstraint: region },
-        };
-        await s3.send(new CreateBucketCommand(createBucketInput));
-        bucketCreatedByTest = true;
-      } catch (error: any) {
-        if (error?.name !== 'BucketAlreadyOwnedByYou') {
-          throw error;
-        }
-      }
-    }
-
-    async function emptyBucket(): Promise<void> {
-      try {
-        const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucketName }));
-        for (const item of listed.Contents || []) {
-          if (item.Key) {
-            await s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: item.Key }));
-          }
-        }
-      } catch (error) {
-        console.warn('[LocalStack Lambda Test] Failed to clean up bucket:', error);
-      }
-    }
 
     async function ensureTasksTable(): Promise<void> {
       try {
@@ -169,12 +127,6 @@ if (!LOCALSTACK_ENDPOINT) {
       process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || 'test';
       process.env.LLM_TASK_TABLE = tableName;
 
-      s3 = new S3Client({
-        region: process.env.AWS_REGION,
-        endpoint: LOCALSTACK_ENDPOINT,
-        forcePathStyle: true,
-      });
-
       dynamo = new DynamoDBClient({
         region: process.env.AWS_REGION,
         endpoint: LOCALSTACK_ENDPOINT,
@@ -186,7 +138,6 @@ if (!LOCALSTACK_ENDPOINT) {
 
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
 
-      await ensureBucket();
       await ensureTasksTable();
     }, 40000);
 
@@ -208,26 +159,12 @@ if (!LOCALSTACK_ENDPOINT) {
         console.log('[LocalStack Lambda Test] Left inserted tasks for inspection:', insertedTasks);
       }
 
-      if (bucketCreatedByTest) {
-        if (cleanupBucketObjects) {
-          await emptyBucket();
-          try {
-            await s3.send(new DeleteBucketCommand({ Bucket: bucketName }));
-          } catch (error) {
-            console.warn('[LocalStack Lambda Test] Failed to delete bucket:', error);
-          }
-        } else {
-          console.log(`[LocalStack Lambda Test] Bucket ${bucketName} created for test; left intact.`);
-        }
-      }
-
       if (tableCreatedByTest && process.env.CLEANUP_LOCALSTACK_LAMBDA_TABLE === '1') {
         await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
         await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       }
 
       await dynamo.destroy();
-      await s3.destroy();
       process.env = ORIGINAL_ENV;
     });
 
@@ -316,8 +253,9 @@ if (!LOCALSTACK_ENDPOINT) {
       const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
       expect(stored.Item).toBeDefined();
       expect(stored.Item?.processingMode).toBe('direct');
+      expect(Array.isArray(stored.Item?.chunks)).toBe(true);
       expect(stored.Item?.chunks?.length ?? 0).toBe(0);
-      expect(typeof stored.Item?.prompt_url).toBe('string');
+      expect(stored.Item?.prompt_payload?.mode).toBe('direct');
 
       fetchMock.mockRestore();
     }, 60000);
@@ -401,6 +339,7 @@ if (!LOCALSTACK_ENDPOINT) {
       expect(Array.isArray(stored.Item?.chunks)).toBe(true);
       expect(stored.Item?.chunks?.length).toBeGreaterThan(0);
       expect(stored.Item?.chunks?.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')).toBe(true);
+      expect(stored.Item?.prompt_payload?.mode).toBe('chunked');
 
       fetchMock.mockRestore();
     }, 60000);

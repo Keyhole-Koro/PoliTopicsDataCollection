@@ -20,10 +20,6 @@ variable "secret_environment_variables" {
   default = {}
 }
 
-variable "prompt_bucket" {
-  type = string
-}
-
 variable "error_bucket" {
   type    = string
   default = null

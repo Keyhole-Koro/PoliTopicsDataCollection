@@ -47,7 +47,6 @@ resource "aws_iam_role_policy_attachment" "dynamodb_tasks" {
 locals {
   env_vars = merge(
     {
-      PROMPT_BUCKET  = var.prompt_bucket
       ERROR_BUCKET   = coalesce(var.error_bucket, "")
       LLM_TASK_TABLE = var.task_table_name
     },

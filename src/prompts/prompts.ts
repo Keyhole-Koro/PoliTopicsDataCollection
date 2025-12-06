@@ -17,7 +17,11 @@ export const instruction_chunk = `【chunkモードの出力指針】
 - middle_summary（必須）: reduce統合に最適化した最小要点の列。
 - soft_summary（必須）: このchunk範囲を一般読者向けにやさしく説明。
 - dialogs/participants/terms/keywords: このchunkに現れた範囲で必要なもののみ。
-- title / category / description / summary / date は出力しない（reduceで決定）。`;
+- title / category / description / summary / date は出力しない（reduceで決定）。
+補足:
+- middle_summaryのsummaryには必ず論点の背景（誰が、どの立場で、何を主張/回答したか）を1文以上で含め、based_on_ordersの順序と自然に対応させること。
+- soft_summaryは「このchunkの意味」を新規読者にストーリーとして伝える。個人名・役職・具体的数値や締切が登場した場合は、分かる範囲で自然文に織り込む。
+- participantsのsummaryでは、reduce処理者が議事録原文を追い直さなくても意図を理解できるよう、1〜2文で発言意図とアクションを明示する。`;
 
 export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。

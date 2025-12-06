@@ -4,7 +4,6 @@
   "type": "commonjs",
   "scripts": {
     "test": "jest",
-    "local:bootstrap": "npx ts-node -r tsconfig-paths/register scripts/localBootstrap.ts",
     "build": "node scripts/build-lambda.js",
     "postbuild": "tsc-alias"
   },

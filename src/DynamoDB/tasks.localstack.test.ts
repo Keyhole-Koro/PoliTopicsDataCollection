@@ -16,6 +16,16 @@ const AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
 
 const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTask => {
   const createdAt = new Date().toISOString();
+  const meeting = {
+    issueID: args.issueID,
+    nameOfMeeting: 'Test Meeting',
+    nameOfHouse: 'House',
+    date: '2025-11-30',
+    numberOfSpeeches: args.chunkCount || 1,
+  };
+  const range = { from: '2025-11-01', until: '2025-11-30' };
+  const chunkIds = Array.from({ length: args.chunkCount }, (_, idx) => `CHUNK#${idx}`);
+
   return {
     pk: args.issueID,
     status: 'pending',
@@ -25,20 +35,35 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
     createdAt,
     updatedAt: createdAt,
     processingMode: args.chunkCount ? 'chunked' : 'direct',
-    prompt_url: `s3://politopics/prompts/${args.issueID}_reduce.json`,
-    meeting: {
-      issueID: args.issueID,
-      nameOfMeeting: 'Test Meeting',
-      nameOfHouse: 'House',
-      date: '2025-11-30',
-      numberOfSpeeches: args.chunkCount || 1,
-    },
-    result_url: `s3://politopics/results/${args.issueID}_reduce.json`,
+    prompt_payload: args.chunkCount
+      ? {
+        mode: 'chunked' as const,
+        reducePromptTemplate: 'reduce',
+        meeting,
+        range,
+        chunkIds,
+        runId: 'test',
+      }
+      : {
+        mode: 'direct' as const,
+        chunkPromptTemplate: 'chunk',
+        reducePromptTemplate: 'reduce',
+        meeting,
+        range,
+        packIndices: [0],
+        speechIds: ['sp-0'],
+        speeches: [],
+        runId: 'test',
+      },
+    meeting,
     chunks: Array.from({ length: args.chunkCount }, (_, idx) => ({
       id: `CHUNK#${idx}`,
-      prompt_key: `prompts/${args.issueID}_${idx}.json`,
-      prompt_url: `s3://politopics/prompts/${args.issueID}_${idx}.json`,
-      result_url: `s3://politopics/results/${args.issueID}_${idx}.json`,
+      payload: {
+        prompt: 'chunk',
+        speeches: [],
+        speechIds: [`sp-${idx}`],
+        indices: [idx],
+      },
       status: 'notReady' as const,
     })),
   };

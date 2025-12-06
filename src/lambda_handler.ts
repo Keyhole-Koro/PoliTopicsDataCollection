@@ -3,13 +3,9 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { Handler, ScheduledEvent } from 'aws-lambda';
 
-import { S3Client } from '@aws-sdk/client-s3';
-
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { chunk_prompt, reduce_prompt } from '@prompts/prompts';
-import { getAwsEndpoint, getAwsRegion } from '@utils/aws';
-
 import { resJson, isApiResponse } from './lambda/httpResponses';
 import { fetchMeetingsForRange } from './lambda/meetings';
 import { resolveRunRange } from './lambda/rangeResolver';
@@ -24,15 +20,8 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const GEMINI_MODEL = 'gemini-2.5-pro';
-const PROMPT_BUCKET = 'politopics-prompts';
 const RUN_ID_PLACEHOLDER = '';
 
-const awsRegion = getAwsRegion();
-const awsEndpoint = getAwsEndpoint();
-const s3 = new S3Client({
-  region: awsRegion,
-  ...(awsEndpoint ? { endpoint: awsEndpoint, forcePathStyle: true } : {}),
-});
 const taskRepo = new TaskRepository();
 
 const nationalDietApiEndpoint = process.env.NATIONAL_DIET_API_ENDPOINT || 'https://kokkai.ndl.go.jp/api/meeting';
@@ -79,9 +68,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         reducePromptTemplate,
         availableTokens,
         range,
-        bucket: PROMPT_BUCKET,
         geminiModel: GEMINI_MODEL,
-        s3,
         runId: RUN_ID_PLACEHOLDER,
         countTokens,
       });

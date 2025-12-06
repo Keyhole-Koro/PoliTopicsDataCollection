@@ -1,8 +1,7 @@
-aws_region          = "ap-northeast-3"
-environment         = "production"
-service_name        = "politopics"
-prompt_bucket_name  = "politopics-data-collection-prompts-production"
-error_bucket_name   = "politopics-data-collection-errors-production"
+aws_region        = "ap-northeast-3"
+environment       = "production"
+service_name      = "politopics"
+error_bucket_name = "politopics-data-collection-errors-production"
 llm_task_table_name = "politopics-llm-tasks-production"
 lambda_memory_mb    = 128
 lambda_timeout_sec  = 300

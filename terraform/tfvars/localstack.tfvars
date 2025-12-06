@@ -1,10 +1,11 @@
 aws_region          = "ap-northeast-3"
+aws_endpoint_url    = "http://localstack:4566"
+aws_access_key      = "test"
+aws_secret_key      = "test"
 environment         = "local"
 service_name        = "politopics"
-prompt_bucket_name  = "politopics-data-collection-prompts-local"
 error_bucket_name   = "politopics-data-collection-errors-local"
 llm_task_table_name = "politopics-llm-tasks-local"
-aws_endpoint_url    = "http://localstack:4566"
 lambda_memory_mb    = 128
 lambda_timeout_sec  = 120
 schedule_expression = "rate(1 day)"

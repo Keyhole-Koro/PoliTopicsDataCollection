@@ -1,13 +1,4 @@
 import {
-  CreateBucketCommand,
-  DeleteBucketCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-  S3Client,
-  type BucketLocationConstraint,
-  type CreateBucketCommandInput,
-} from '@aws-sdk/client-s3';
-import {
   CreateTableCommand,
   DeleteTableCommand,
   DescribeTableCommand,
@@ -37,16 +28,11 @@ if (!LOCALSTACK_ENDPOINT) {
 } else {
   describe('lambda_handler integration using the real National Diet API with LocalStack S3/DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = 'politopics-prompts';
     const configuredTable = process.env.LLM_TASK_TABLE;
     const tableName = configuredTable || 'PoliTopics-llm-tasks';
     const cleanupCreatedTable = process.env.CLEANUP_LOCALSTACK_TASK_TABLE === '1';
-    const cleanupCreatedBucket = process.env.CLEANUP_LOCALSTACK_BUCKET === '1';
-
-    let s3: S3Client | undefined;
     let dynamo: DynamoDBClient | undefined;
     let docClient: DynamoDBDocumentClient | undefined;
-    let bucketCreatedByTest = false;
     let tableCreatedByTest = false;
 
     const cacheFile = path.join(os.tmpdir(), 'nd-cache.json');
@@ -129,23 +115,6 @@ if (!LOCALSTACK_ENDPOINT) {
       }
     }
 
-    async function emptyAndDeleteBucket(): Promise<void> {
-      if (!s3) {
-        return;
-      }
-      try {
-        const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucketName }));
-        for (const item of listed.Contents || []) {
-          if (item.Key) {
-            await s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: item.Key }));
-          }
-        }
-        await s3.send(new DeleteBucketCommand({ Bucket: bucketName }));
-      } catch (error) {
-        console.warn('Failed to clean up S3 bucket:', error);
-      }
-    }
-
     async function deleteTable(): Promise<void> {
       if (!dynamo) {
         return;
@@ -208,27 +177,6 @@ if (!LOCALSTACK_ENDPOINT) {
       process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || 'test';
       process.env.LLM_TASK_TABLE = tableName;
 
-      const region = (process.env.AWS_REGION || 'ap-northeast-3') as BucketLocationConstraint;
-
-      s3 = new S3Client({
-        region,
-        endpoint: LOCALSTACK_ENDPOINT,
-        forcePathStyle: true,
-      });
-
-      try {
-        const createBucketInput: CreateBucketCommandInput = {
-          Bucket: bucketName,
-          CreateBucketConfiguration: { LocationConstraint: region },
-        };
-        await s3.send(new CreateBucketCommand(createBucketInput));
-        bucketCreatedByTest = true;
-      } catch (error: any) {
-        if (error?.name !== 'BucketAlreadyOwnedByYou') {
-          throw error;
-        }
-      }
-
       dynamo = new DynamoDBClient({
         region: process.env.AWS_REGION,
         endpoint: LOCALSTACK_ENDPOINT,
@@ -254,12 +202,6 @@ if (!LOCALSTACK_ENDPOINT) {
       } else {
         await dynamo?.destroy();
         console.log(`[LocalStack Integration] DynamoDB table ${tableName} existed prior to test; left untouched.`);
-      }
-
-      if (bucketCreatedByTest && cleanupCreatedBucket) {
-        await emptyAndDeleteBucket();
-      } else if (bucketCreatedByTest) {
-        console.log(`[LocalStack Integration] Leaving created S3 bucket ${bucketName} intact for review.`);
       }
 
       delete process.env.NATIONAL_DIET_CACHE_FILE;
@@ -340,7 +282,10 @@ if (!LOCALSTACK_ENDPOINT) {
           }
 
           expect(recentTasks.length).toBeGreaterThan(0);
-          expect(recentTasks.every((task) => typeof task.prompt_url === 'string' && task.prompt_url.startsWith(`s3://${bucketName}/prompts/`))).toBe(true);
+          expect(recentTasks.every((task) =>
+            task?.prompt_payload &&
+            (task.prompt_payload.mode === 'direct' || task.prompt_payload.mode === 'chunked')
+          )).toBe(true);
 
           const chunkedTasks = recentTasks.filter((task) => task.processingMode === 'chunked');
           const directTasks = recentTasks.filter((task) => task.processingMode === 'direct');
@@ -349,7 +294,7 @@ if (!LOCALSTACK_ENDPOINT) {
             expect(chunkedTasks.every((task) =>
               Array.isArray(task.chunks) &&
               task.chunks.length > 0 &&
-              task.chunks.every((chunk: any) => chunk.status === 'notReady')
+              task.chunks.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')
             )).toBe(true);
           }
           if (directTasks.length) {
@@ -369,7 +314,10 @@ if (!LOCALSTACK_ENDPOINT) {
 
           const tasksAfterSecond = await fetchAllTasks();
           expect(tasksAfterSecond.length).toBeGreaterThan(0);
-          expect(tasksAfterSecond.every((task) => typeof task.prompt_url === 'string' && task.prompt_url.startsWith(`s3://${bucketName}/prompts/`))).toBe(true);
+          expect(tasksAfterSecond.every((task) =>
+            task?.prompt_payload &&
+            (task.prompt_payload.mode === 'direct' || task.prompt_payload.mode === 'chunked')
+          )).toBe(true);
           expect(tasksAfterSecond.every((task) => Array.isArray(task.chunks))).toBe(true);
 
           try {
