@@ -80,6 +80,7 @@ export async function buildTasksForMeeting(args: {
     nameOfHouse: meetingHouse,
     date: meetingDate || new Date().toISOString().split('T')[0],
     numberOfSpeeches: speeches.length,
+    session: meeting.session ?? 0,
   };
 
   const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;

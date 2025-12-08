@@ -32,6 +32,7 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
       nameOfHouse: 'House',
       date: '2025-11-30',
       numberOfSpeeches: args.chunkCount || 1,
+      session: 208,
     },
     result_url: `s3://politopics/results/${args.issueID}_reduce.json`,
     chunks: Array.from({ length: args.chunkCount }, (_, idx) => ({

@@ -57,6 +57,7 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
       nameOfHouse: 'House',
       date: '2025-11-30',
       numberOfSpeeches: chunkCount,
+      session: 208,
     },
     result_url: `s3://politopics-prompts/results/${issueID}_reduce.json`,
     chunks: Array.from({ length: chunkCount }, (_, idx) => ({

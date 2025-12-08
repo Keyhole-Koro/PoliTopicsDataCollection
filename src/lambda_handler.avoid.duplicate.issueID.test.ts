@@ -234,6 +234,7 @@ if (!LOCALSTACK_ENDPOINT) {
             nameOfHouse: 'House of Representatives',
             date: '2024-09-24',
             numberOfSpeeches: 2,
+            session: 208,
           },
           result_url: `s3://${bucketName}/results/${issueID}_reduce.json`,
           chunks: [],
