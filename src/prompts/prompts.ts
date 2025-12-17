@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2025-12-09.1";
+export const PROMPT_VERSION = "2025-12-17.1";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -34,12 +34,18 @@ export const instruction_reduce = `【reduceモードの出力指針】
 - based_on_orders は統合後に参照した order のユニオンまたは代表範囲。
 - dialogs / terms / keywords は出力しない。`;
 
-export const instruction_single_chunk = `【single_chunkモードの出力指針】
-- chunkセクション: chunkモード同等。middle_summary・soft_summary・dialogs・participants・terms・keywordsを必須要件どおりに作成し、based_on_ordersを欠かさない。
-- reduceセクション: このsingle chunkだけを材料に、会議全体の最終 title / category / description / date / summary / participants を完成形で出力。chunkセクションで使った語句を重複させず統合する。
-- participantsは chunkセクションと reduceセクションで役割が異なるため、それぞれの粒度（chunk=発言範囲、reduce=会議全体）を明示する。
-- chunkとreduceの内容は矛盾させない。reduce.summaryは chunk.middle_summary の要点を昇華した構造化要約になっていること。
-- dialogsのreaction、based_on_orders、数値・担当者・期限の明示など、共通の厳守事項をすべて維持する。`;
+export const instruction_single_chunk = `【single_chunkモード（統合出力）の指針】
+- 出力は chunk / reduce に分けず、single_chunk として1つのJSONに統合する。
+- 以下2つの粒度を必ず明示的に区別すること：
+  - chunk粒度：この入力範囲内の発言・要約
+  - meeting粒度：会議全体としての最終整理（reduce相当）
+- middle_summary・soft_summary・dialogs・terms・keywords は chunk粒度として作成する。
+- title / category / description / date / meeting_summary / participants_meeting は meeting粒度として完成形で出力する。
+- meeting_summary は middle_summary の要点を昇華・統合した構造化要約とする。
+- chunk粒度と meeting粒度で内容を矛盾させない。
+- based_on_orders は該当するすべての要約・participantsに必ず付与する。
+- dialogs の reaction、数値・担当者・期限の明示など、共通の厳守事項はすべて維持する。`;
+
 
 export const output_format_chunk = `### 出力フォーマット（chunk）
 
@@ -109,62 +115,76 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
 }
 `;
 
-export const output_format_single_chunk = `### 出力フォーマット（single_chunk）
+export const output_format_single_chunk = `### 出力フォーマット（single_chunk・統合）
 
 {
   "prompt_version": "${PROMPT_VERSION}",
   "id": "文字列 (議事録ID 例: issueID)",
 
-  "chunk": {
-    "middle_summary": [
-      {
-        "based_on_orders": [4,5],
-        "summary": "reduce統合に最適化した1要点（chunk範囲）"
-      }
-    ],
-    "soft_summary": {
-      "based_on_orders": [1,2,3],
-      "summary": "やさしい言葉での説明（chunk範囲）"
-    },
-    "dialogs": [
-      {
-        "order": 1,
-        "summary": "発言内容の要約",
-        "soft_language": "原文を崩さずやさしく言い換えた文章",
-        "reaction": "賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ"
-      }
-    ],
-    "participants": [
-      { "name": "話者名", "position": "役職（不明可）", "summary": "この人の発言要旨（chunk粒度）" }
-    ],
-    "terms": [
-      { "term": "専門用語", "definition": "chunkで出た用語の説明" }
-    ],
-    "keywords": [
-      { "keyword": "代表表記", "priority": "high | medium | low" }
-    ]
+  "title": "single chunkから導く会議全体の見出し",
+  "category": "会議全体を表すカテゴリ",
+  "description": "1〜2文＋必要なら箇条書きで全体像を説明",
+  "date": "開催日 (YYYY-MM-DD) または 空文字",
+
+  "middle_summary": [
+    {
+      "based_on_orders": [4,5],
+      "summary": "reduce統合に最適化した1要点（chunk粒度）"
+    }
+  ],
+
+  "soft_summary": {
+    "based_on_orders": [1,2,3],
+    "summary": "やさしい言葉での説明（chunk粒度）"
   },
 
-  "reduce": {
-    "title": "single chunkから導く会議全体の見出し",
-    "category": "会議全体を表すカテゴリ",
-    "description": "1〜2文＋必要なら箇条書きで全体像を説明",
-    "date": "開催日 (YYYY-MM-DD) または 空文字",
-    "summary": {
-      "based_on_orders": [1,2,3,4,5],
-      "summary": "会議全体の最終要約（決定事項/主要論点/未決・宿題/次に起こること/重要数値）"
-    },
-    "participants": [
-      {
-        "name": "話者名（統合済み）",
-        "position": "役職（分かれば）",
-        "summary": "会議全体での役割・主張",
-        "based_on_orders": [10,14,29]
-      }
-    ]
-  }
+  "dialogs": [
+    {
+      "order": 1,
+      "summary": "発言内容の要約",
+      "soft_language": "原文を崩さずやさしく言い換えた文章",
+      "reaction": "賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ"
+    }
+  ],
+
+  "participants_chunk": [
+    {
+      "name": "話者名",
+      "position": "役職（不明可）",
+      "summary": "この人の発言要旨（chunk粒度）"
+    }
+  ],
+
+  "terms": [
+    {
+      "term": "専門用語",
+      "definition": "chunkで出た用語の説明"
+    }
+  ],
+
+  "keywords": [
+    {
+      "keyword": "代表表記",
+      "priority": "high | medium | low"
+    }
+  ],
+
+  "meeting_summary": {
+    "based_on_orders": [1,2,3,4,5],
+    "summary": "会議全体の最終要約（決定事項 / 主要論点 / 未決・宿題 / 次に起こること / 重要数値）"
+  },
+
+  "participants_meeting": [
+    {
+      "name": "話者名（統合済み）",
+      "position": "役職（分かれば）",
+      "summary": "会議全体での役割・主張",
+      "based_on_orders": [10,14,29]
+    }
+  ]
 }
 `;
+
 
 export const chunk_prompt = (input: string): string => {
   return `${instruction_common}\n${instruction_chunk}\n${output_format_chunk}\n### 入力\n${input}`;
@@ -175,5 +195,9 @@ export const reduce_prompt = (input: string): string => {
 };
 
 export const single_chunk_prompt = (input: string): string => {
-  return `${instruction_common}\n${instruction_single_chunk}\n${output_format_single_chunk}\n### 入力\n${input}`;
+  return `${instruction_common}
+${instruction_single_chunk}
+${output_format_single_chunk}
+### 入力
+${input}`;
 };
