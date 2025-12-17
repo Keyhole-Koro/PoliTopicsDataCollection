@@ -20,7 +20,7 @@ const collectSpeechesByIndex = (speeches: RawSpeechRecord[], indices: number[]):
     .filter((speech): speech is RawSpeechRecord => Boolean(speech))
 );
 
-const isoNow = (): string => new Date().toISOString();
+const isoDate = (): string => new Date().toISOString().split('T')[0];
 
 export async function buildTasksForMeeting(args: {
   meeting: MeetingRecord;
@@ -87,7 +87,7 @@ export async function buildTasksForMeeting(args: {
 
   const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;
   const singleChunkMode = packs.length === 1 && !packs[0].oversized;
-  const createdAt = isoNow();
+  const createdAt = isoDate();
 
   if (singleChunkMode) {
     const pack = packs[0];
