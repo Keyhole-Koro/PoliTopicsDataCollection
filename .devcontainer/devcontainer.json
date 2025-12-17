@@ -25,7 +25,7 @@
     }
   },
 
-  "postCreateCommand": "pnpm install && pnpm build",
+  "postCreateCommand": "bash .devcontainer/bootstrap-localstack.sh",
 
   "remoteEnv": {
     "AWS_REGION": "${localEnv:AWS_REGION}",

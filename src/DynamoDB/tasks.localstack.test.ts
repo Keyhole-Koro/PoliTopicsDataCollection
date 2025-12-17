@@ -24,7 +24,7 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
     retryAttempts: 0,
     createdAt,
     updatedAt: createdAt,
-    processingMode: args.chunkCount ? 'chunked' : 'direct',
+    processingMode: args.chunkCount ? 'chunked' : 'single_chunk',
     prompt_url: `s3://politopics/prompts/${args.issueID}_reduce.json`,
     meeting: {
       issueID: args.issueID,

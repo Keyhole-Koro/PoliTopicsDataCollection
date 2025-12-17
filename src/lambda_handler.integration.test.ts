@@ -281,7 +281,7 @@ if (!LOCALSTACK_ENDPOINT) {
           )).toBe(true);
 
           const chunkedTasks = recentTasks.filter((task) => task.processingMode === 'chunked');
-          const directTasks = recentTasks.filter((task) => task.processingMode === 'direct');
+          const directTasks = recentTasks.filter((task) => task.processingMode === 'single_chunk');
 
           if (chunkedTasks.length) {
             expect(chunkedTasks.every((task) =>

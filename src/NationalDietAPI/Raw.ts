@@ -1,11 +1,8 @@
 import {
   array,
   check,
-  null_,
   number,
-  nullable,
   object,
-  optional,
   pipe,
   string,
   transform,
@@ -20,19 +17,16 @@ const numericField = pipe(
   check((value) => Number.isFinite(value), 'Expected a finite number'),
 );
 
-const stringField = pipe(
-  optional(union([string(), null_()])),
-  transform((value) => value ?? ''),
-);
+const stringField = string();
 
 export const rawSpeechRecordSchema = object({
   speechID: string(),
   speechOrder: numericField,
   speaker: stringField,
-  speakerYomi: nullable(string()),
-  speakerGroup: nullable(string()),
-  speakerPosition: nullable(string()),
-  speakerRole: nullable(string()),
+  speakerYomi: string(),
+  speakerGroup: string(),
+  speakerPosition: string(),
+  speakerRole: string(),
   speech: stringField,
   startPage: numericField,
   createTime: stringField,
@@ -41,13 +35,8 @@ export const rawSpeechRecordSchema = object({
 });
 
 const speechRecordArraySchema = pipe(
-  optional(union([array(rawSpeechRecordSchema), rawSpeechRecordSchema, null_()])),
-  transform((value) => {
-    if (!value) {
-      return [];
-    }
-    return Array.isArray(value) ? value : [value];
-  }),
+  union([array(rawSpeechRecordSchema), rawSpeechRecordSchema]),
+  transform((value) => (Array.isArray(value) ? value : [value])),
 );
 
 export type RawSpeechRecord = InferOutput<typeof rawSpeechRecordSchema>;
@@ -61,23 +50,13 @@ export const rawMeetingRecordSchema = object({
   nameOfMeeting: stringField,
   issue: stringField,
   date: stringField,
-  closing: nullable(string()),
+  closing: string(),
   speechRecord: speechRecordArraySchema,
 });
 
 const meetingRecordArraySchema = pipe(
-  union([array(rawMeetingRecordSchema), rawMeetingRecordSchema, null_()]),
-  transform((value) => {
-    if (!value) {
-      return [];
-    }
-    return Array.isArray(value) ? value : [value];
-  }),
-);
-
-const meetingRecordFieldSchema = pipe(
-  optional(meetingRecordArraySchema),
-  transform((value) => value ?? []),
+  union([array(rawMeetingRecordSchema), rawMeetingRecordSchema]),
+  transform((value) => (Array.isArray(value) ? value : [value])),
 );
 
 export type RawMeetingRecord = InferOutput<typeof rawMeetingRecordSchema>;
@@ -86,8 +65,8 @@ export const rawMeetingDataSchema = object({
   numberOfRecords: numericField,
   numberOfReturn: numericField,
   startRecord: numericField,
-  nextRecordPosition: nullable(numericField),
-  meetingRecord: meetingRecordFieldSchema,
+  nextRecordPosition: numericField,
+  meetingRecord: meetingRecordArraySchema,
 });
 
 export type RawMeetingData = InferOutput<typeof rawMeetingDataSchema>;

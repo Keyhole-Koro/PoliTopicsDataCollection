@@ -29,6 +29,17 @@ Provide these via `.env`, your shell, or the AWS Lambda configuration.
 
 ./doc/terraform-localstack.md
 
+### Terraform Commands (LocalStack)
+
+Quick reference for the common Terraform workflow when targeting LocalStack:
+
+```bash
+cd terraform
+terraform init -backend-config=backends/local.hcl
+terraform plan -var-file=tfvars/localstack.tfvars -out=tfplan
+terraform apply "tfplan"
+```
+
 ### Invoke the `/run` endpoint
 
 After applying Terraform (stage/production or LocalStack with `enable_http_api = true`), fetch the HTTP API endpoint and call `/run` with the configured API key:
@@ -47,6 +58,9 @@ curl -H "x-api-key: $RUN_API_KEY" \
 ```bash
 ./create-state-bucket.sh stage
 ./create-state-bucket.sh production
+# LocalStack (defaults to http://localstack:4566; override via LOCALSTACK_ENDPOINT)
+./create-state-bucket.sh local
+LOCALSTACK_ENDPOINT=http://localstack:4566 ./create-state-bucket.sh local
 ```
 
 ## Import manually

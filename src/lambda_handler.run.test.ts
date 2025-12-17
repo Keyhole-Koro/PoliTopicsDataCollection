@@ -56,7 +56,7 @@ describe('lambda_handler run endpoint', () => {
     process.env.RUN_API_KEY = 'secret';
     process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
     process.env.GEMINI_API_KEY = 'fake';
-    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-test';
+    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-local';
     process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
 
     await jest.isolateModulesAsync(async () => {
@@ -73,7 +73,7 @@ describe('lambda_handler run endpoint', () => {
     process.env.RUN_API_KEY = 'secret';
     process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
     process.env.GEMINI_API_KEY = 'fake';
-    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-test';
+    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-local';
     process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
 
     const fetchMock = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({

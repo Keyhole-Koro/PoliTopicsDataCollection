@@ -7,7 +7,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import { chunk_prompt, reduce_prompt } from '@prompts/prompts';
+import { chunk_prompt, reduce_prompt, single_chunk_prompt } from '@prompts/prompts';
 import { getAwsEndpoint, getAwsRegion } from '@utils/aws';
 
 import { resJson, isApiResponse } from './lambda/httpResponses';
@@ -28,7 +28,7 @@ for (const key of requiredEnv) {
   env[key] = value;
 }
 
-const GEMINI_MODEL = 'gemini-2.5-pro';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const PROMPT_BUCKET = env.PROMPT_BUCKET;
 const RUN_ID_PLACEHOLDER = '';
 
@@ -69,6 +69,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
 
     const chunkPromptTemplate = chunk_prompt('');
     const reducePromptTemplate = reduce_prompt('');
+    const singleChunkPromptTemplate = single_chunk_prompt('');
     const promptTokenCost = await countTokens(chunkPromptTemplate);
     const availableTokens = geminiMaxInputToken - promptTokenCost;
 
@@ -97,6 +98,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         meeting,
         chunkPromptTemplate,
         reducePromptTemplate,
+        singleChunkPromptTemplate,
         availableTokens,
         range,
         bucket: PROMPT_BUCKET,

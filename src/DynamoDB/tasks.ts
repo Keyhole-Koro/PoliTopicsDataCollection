@@ -16,7 +16,7 @@ const nowIso = (): string => new Date().toISOString();
 
 export type TaskStatus = 'pending' | 'completed';
 export type ChunkStatus = 'notReady' | 'ready';
-export type ReduceProcessingMode = 'direct' | 'chunked';
+export type ReduceProcessingMode = 'single_chunk' | 'chunked';
 
 export type Meeting = {
   issueID: string;

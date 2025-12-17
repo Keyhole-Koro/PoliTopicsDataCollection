@@ -12,6 +12,12 @@ import {
   type KeySchemaElement,
   type TableDescription,
 } from '@aws-sdk/client-dynamodb';
+import {
+  CreateBucketCommand,
+  HeadBucketCommand,
+  S3Client,
+  type BucketLocationConstraint,
+} from '@aws-sdk/client-s3';
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
@@ -21,10 +27,10 @@ const buildSpeeches = (count: number): RawSpeechRecord[] => (
     speechID: `sp-${idx + 1}`,
     speechOrder: idx + 1,
     speaker: `Speaker ${idx + 1}`,
-    speakerYomi: null,
-    speakerGroup: null,
-    speakerPosition: null,
-    speakerRole: null,
+    speakerYomi: `Speaker ${idx + 1} Yomi`,
+    speakerGroup: `Group ${idx + 1}`,
+    speakerPosition: 'Member',
+    speakerRole: `Role ${idx + 1}`,
     speech: `Speech text ${idx + 1}`,
     startPage: idx + 1,
     createTime: new Date().toISOString(),
@@ -45,7 +51,7 @@ if (!LOCALSTACK_ENDPOINT) {
 } else {
   describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = process.env.PROMPT_BUCKET || 'politopics-prompts';
+    const bucketName = 'politopics-data-collection-prompts-local';
     const configuredTable = process.env.LLM_TASK_TABLE;
     const tableName = configuredTable || 'PoliTopics-llm-tasks';
     const cleanupInsertedTasks = process.env.CLEANUP_LOCALSTACK_LAMBDA_TASKS === '1';
@@ -72,6 +78,7 @@ if (!LOCALSTACK_ENDPOINT) {
 
     let dynamo: DynamoDBClient;
     let docClient: DynamoDBDocumentClient;
+    let s3: S3Client;
     let tableCreatedByTest = false;
     const insertedTasks: string[] = [];
 
@@ -111,6 +118,28 @@ if (!LOCALSTACK_ENDPOINT) {
       tableCreatedByTest = true;
     }
 
+    async function ensurePromptBucket(): Promise<void> {
+      try {
+        await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
+        return;
+      } catch (error: any) {
+        if (!['NotFound', 'NoSuchBucket'].includes(error?.name)) {
+          // LocalStack reports 404 via Metadata httpStatusCode
+          if (error?.$metadata?.httpStatusCode !== 404) {
+            throw error;
+          }
+        }
+      }
+
+      const bucketRegion = 'ap-northeast-3';
+      const configuration = { LocationConstraint: bucketRegion as BucketLocationConstraint };
+
+      await s3.send(new CreateBucketCommand({
+        Bucket: bucketName,
+        ...(configuration ? { CreateBucketConfiguration: configuration } : {}),
+      }));
+    }
+
     beforeAll(async () => {
       jest.resetModules();
       jest.clearAllMocks();
@@ -138,7 +167,17 @@ if (!LOCALSTACK_ENDPOINT) {
       });
 
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
+      s3 = new S3Client({
+        region: process.env.AWS_REGION,
+        endpoint: LOCALSTACK_ENDPOINT,
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        },
+      });
 
+      await ensurePromptBucket();
       await ensureTasksTable();
     }, 40000);
 
@@ -165,7 +204,10 @@ if (!LOCALSTACK_ENDPOINT) {
         await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       }
 
-      await dynamo.destroy();
+      await Promise.allSettled([
+        dynamo.destroy(),
+        s3.destroy(),
+      ]);
       process.env = ORIGINAL_ENV;
     });
 
@@ -196,7 +238,7 @@ if (!LOCALSTACK_ENDPOINT) {
             nameOfMeeting: 'Budget Committee',
             issue: 'Budget Deliberations',
             date: '2024-09-24',
-            closing: null,
+            closing: 'Adjourned',
             speechRecord: buildSpeeches(2),
           },
         ],
@@ -253,7 +295,7 @@ if (!LOCALSTACK_ENDPOINT) {
       insertedTasks.push(issueID);
       const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
       expect(stored.Item).toBeDefined();
-      expect(stored.Item?.processingMode).toBe('direct');
+      expect(stored.Item?.processingMode).toBe('single_chunk');
       expect(Array.isArray(stored.Item?.chunks)).toBe(true);
       expect(stored.Item?.chunks?.length ?? 0).toBe(0);
       expect(typeof stored.Item?.prompt_url).toBe('string');
@@ -278,7 +320,7 @@ if (!LOCALSTACK_ENDPOINT) {
             nameOfMeeting: 'Science Committee',
             issue: 'AI Policy',
             date: '2024-10-01',
-            closing: null,
+            closing: 'Adjourned',
             speechRecord: buildSpeeches(6),
           },
         ],

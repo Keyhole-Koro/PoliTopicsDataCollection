@@ -2,12 +2,14 @@
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <stage|production>"
+  echo "Usage: $0 <stage|production|local>"
   exit 1
 fi
 
 ENV="$1"
 REGION="ap-northeast-3"
+LOCALSTACK_ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localstack:4566}"
+AWS_ARGS=()
 
 case "$ENV" in
   stage)
@@ -15,6 +17,10 @@ case "$ENV" in
     ;;
   production)
     BUCKET="politopics-data-collection-production-state"
+    ;;
+  local)
+    BUCKET="politopics-data-collection-local-state-bucket"
+    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_ENDPOINT")
     ;;
   *)
     echo "Unknown environment: $ENV"
@@ -25,22 +31,25 @@ esac
 echo "Environment : $ENV"
 echo "Bucket      : $BUCKET"
 echo "Region      : $REGION"
+if [ "$ENV" = "local" ]; then
+  echo "Endpoint    : $LOCALSTACK_ENDPOINT"
+fi
 echo
 
 
 echo "==> Checking S3 bucket exists..."
 
-if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+if aws "${AWS_ARGS[@]}" s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
   echo "S3 bucket already exists: $BUCKET"
 else
   echo "Creating S3 bucket: $BUCKET"
-  aws s3api create-bucket \
+  aws "${AWS_ARGS[@]}" s3api create-bucket \
     --bucket "$BUCKET" \
     --region "$REGION" \
     --create-bucket-configuration LocationConstraint="$REGION"
 
   echo "Enabling default encryption (AES256)..."
-  aws s3api put-bucket-encryption \
+  aws "${AWS_ARGS[@]}" s3api put-bucket-encryption \
     --bucket "$BUCKET" \
     --server-side-encryption-configuration '{
       "Rules": [{
@@ -51,7 +60,7 @@ else
     }'
 
   echo "Enabling versioning..."
-  aws s3api put-bucket-versioning \
+  aws "${AWS_ARGS[@]}" s3api put-bucket-versioning \
     --bucket "$BUCKET" \
     --versioning-configuration Status=Enabled
 fi

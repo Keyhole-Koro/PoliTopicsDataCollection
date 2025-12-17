@@ -26,6 +26,7 @@ export async function buildTasksForMeeting(args: {
   meeting: MeetingRecord;
   chunkPromptTemplate: string;
   reducePromptTemplate: string;
+  singleChunkPromptTemplate: string;
   availableTokens: number;
   range: RunRange;
   bucket: string;
@@ -38,6 +39,7 @@ export async function buildTasksForMeeting(args: {
     meeting,
     chunkPromptTemplate,
     reducePromptTemplate,
+    singleChunkPromptTemplate,
     availableTokens,
     range,
     bucket,
@@ -47,7 +49,7 @@ export async function buildTasksForMeeting(args: {
     countTokens,
   } = args;
 
-  const meetingIssueID = meeting.issueID?.trim();
+  const meetingIssueID = meeting.issueID.trim();
   if (!meetingIssueID) {
     console.warn('[Meeting] Missing issueID; skipping meeting with payload:', {
       date: meeting.date,
@@ -56,11 +58,11 @@ export async function buildTasksForMeeting(args: {
     return undefined;
   }
 
-  const meetingName = meeting.nameOfMeeting?.trim() || 'Unknown meeting';
-  const meetingHouse = meeting.nameOfHouse?.trim() || 'Unknown house';
-  const meetingDate = meeting.date?.trim() || '';
+  const meetingName = meeting.nameOfMeeting.trim();
+  const meetingHouse = meeting.nameOfHouse.trim();
+  const meetingDate = meeting.date.trim();
 
-  const speeches: RawSpeechRecord[] = meeting.speechRecord ?? [];
+  const speeches: RawSpeechRecord[] = meeting.speechRecord;
   if (!speeches.length) {
     console.log(`[Meeting ${meetingIssueID}] No speeches available; skipping.`);
     return undefined;
@@ -78,23 +80,22 @@ export async function buildTasksForMeeting(args: {
     issueID: meetingIssueID,
     nameOfMeeting: meetingName,
     nameOfHouse: meetingHouse,
-    date: meetingDate || new Date().toISOString().split('T')[0],
+    date: meetingDate,
     numberOfSpeeches: speeches.length,
-    session: meeting.session ?? 0,
+    session: meeting.session,
   };
 
   const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;
-  const singleChunkMode = packs.length === 1 && !packs[0]?.oversized;
+  const singleChunkMode = packs.length === 1 && !packs[0].oversized;
   const createdAt = isoNow();
 
   if (singleChunkMode) {
     const pack = packs[0];
     const chunkSpeeches = collectSpeechesByIndex(speeches, pack.indices);
-    const reducePromptKey = `${reducePromptKeyBase}_direct.json`;
-    const reducePromptPayload = {
-      mode: 'direct',
-      chunkPromptTemplate,
-      reducePromptTemplate,
+    const singleChunkPromptKey = `${reducePromptKeyBase}_direct.json`;
+    const singleChunkPromptPayload = {
+      mode: 'single_chunk',
+      singleChunkPromptTemplate,
       meeting: meetingInfo,
       range,
       packIndices: pack.indices,
@@ -105,8 +106,8 @@ export async function buildTasksForMeeting(args: {
     await putJsonS3({
       s3,
       bucket,
-      key: reducePromptKey,
-      body: reducePromptPayload,
+      key: singleChunkPromptKey,
+      body: singleChunkPromptPayload,
     });
     const task: IssueTask = {
       pk: meetingIssueID,
@@ -116,8 +117,8 @@ export async function buildTasksForMeeting(args: {
       retryAttempts: 0,
       createdAt,
       updatedAt: createdAt,
-      processingMode: 'direct',
-      prompt_url: `s3://${bucket}/${reducePromptKey}`,
+      processingMode: 'single_chunk',
+      prompt_url: `s3://${bucket}/${singleChunkPromptKey}`,
       meeting: meetingInfo,
       result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
       chunks: [],
