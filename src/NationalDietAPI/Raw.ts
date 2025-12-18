@@ -1,6 +1,7 @@
 import {
   array,
   check,
+  nullable,
   number,
   object,
   pipe,
@@ -23,10 +24,10 @@ export const rawSpeechRecordSchema = object({
   speechID: string(),
   speechOrder: numericField,
   speaker: stringField,
-  speakerYomi: string(),
-  speakerGroup: string(),
-  speakerPosition: string(),
-  speakerRole: string(),
+  speakerYomi: nullable(string()),
+  speakerGroup: nullable(string()),
+  speakerPosition: nullable(string()),
+  speakerRole: nullable(string()),
   speech: stringField,
   startPage: numericField,
   createTime: stringField,
@@ -50,7 +51,7 @@ export const rawMeetingRecordSchema = object({
   nameOfMeeting: stringField,
   issue: stringField,
   date: stringField,
-  closing: string(),
+  closing: nullable(string()),
   speechRecord: speechRecordArraySchema,
 });
 
@@ -61,11 +62,13 @@ const meetingRecordArraySchema = pipe(
 
 export type RawMeetingRecord = InferOutput<typeof rawMeetingRecordSchema>;
 
+const nextRecordPositionField = nullable(numericField);
+
 export const rawMeetingDataSchema = object({
   numberOfRecords: numericField,
   numberOfReturn: numericField,
   startRecord: numericField,
-  nextRecordPosition: numericField,
+  nextRecordPosition: nextRecordPositionField,
   meetingRecord: meetingRecordArraySchema,
 });
 

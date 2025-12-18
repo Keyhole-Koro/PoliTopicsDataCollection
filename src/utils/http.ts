@@ -14,7 +14,7 @@ export const parseYmdOrNull = (v?: unknown): string | null => {
   if (v == null) return null;
   const s = String(v);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T00:00:00Z`);
+  if (!Number.isFinite(Date.parse(`${s}T00:00:00Z`))) return null;
+  const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : s;
 };
-

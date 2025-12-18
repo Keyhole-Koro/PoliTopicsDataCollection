@@ -1,3 +1,4 @@
+// TaskRepository integration tests exercising the real DynamoDB API via LocalStack (create/query/update flows).
 import {
   CreateTableCommand,
   DeleteTableCommand,
@@ -10,9 +11,9 @@ import {
 
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
+import { applyLocalstackEnv, getLocalstackConfig } from '../testUtils/testEnv';
 
-const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL;
-const AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
+const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 
 const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTask => {
   const createdAt = new Date().toISOString();
@@ -45,7 +46,7 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
   };
 };
 
-if (!LOCALSTACK_ENDPOINT) {
+if (!HAS_LOCALSTACK) {
   // eslint-disable-next-line jest/no-focused-tests
   describe.skip('TaskRepository LocalStack integration', () => {
     it('skipped because LOCALSTACK_URL is not set', () => {
@@ -54,14 +55,19 @@ if (!LOCALSTACK_ENDPOINT) {
   });
 } else {
   describe('TaskRepository LocalStack integration', () => {
+    const ORIGINAL_ENV = process.env;
     const tableName = `politopics-llm-tasks-test-${Date.now()}`;
     let client: DynamoDBClient;
     let docClient: DynamoDBDocumentClient;
     let repository: TaskRepository;
+    let awsRegion: string;
 
     beforeAll(async () => {
+      process.env = { ...ORIGINAL_ENV };
+      applyLocalstackEnv();
+      awsRegion = process.env.AWS_REGION || 'ap-northeast-3';
       client = new DynamoDBClient({
-        region: AWS_REGION,
+        region: awsRegion,
         endpoint: LOCALSTACK_ENDPOINT,
         credentials: {
           accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
@@ -99,6 +105,7 @@ if (!LOCALSTACK_ENDPOINT) {
     afterAll(async () => {
       await client.send(new DeleteTableCommand({ TableName: tableName }));
       await client.destroy();
+      process.env = ORIGINAL_ENV;
     });
 
     test('creates tasks with chunk metadata and lists pending items', async () => {

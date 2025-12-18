@@ -1,6 +1,9 @@
+// Unit-level suite that isolates the /run handler path with mocked dependencies (fetch, DynamoDB),
+// ensuring auth failures and empty-meeting responses behave correctly without touching LocalStack.
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
+import { applyLambdaTestEnv } from './testUtils/testEnv';
 
 const createTaskMock = jest.fn();
 
@@ -53,11 +56,7 @@ describe('lambda_handler run endpoint', () => {
   });
 
   test('rejects requests without a valid x-api-key header', async () => {
-    process.env.RUN_API_KEY = 'secret';
-    process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
-    process.env.GEMINI_API_KEY = 'fake';
-    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-local';
-    process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
+    applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
 
     await jest.isolateModulesAsync(async () => {
       const { handler } = await import('./lambda_handler');
@@ -70,11 +69,7 @@ describe('lambda_handler run endpoint', () => {
   });
 
   test('processes /run when the API key and dependencies are configured', async () => {
-    process.env.RUN_API_KEY = 'secret';
-    process.env.GEMINI_MAX_INPUT_TOKEN = '1200';
-    process.env.GEMINI_API_KEY = 'fake';
-    process.env.PROMPT_BUCKET = 'politopics-data-collection-prompts-local';
-    process.env.NATIONAL_DIET_API_ENDPOINT = 'https://kokkai.ndl.go.jp/api/meeting';
+    applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
 
     const fetchMock = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({
       ok: true,
@@ -83,7 +78,7 @@ describe('lambda_handler run endpoint', () => {
         numberOfRecords: 0,
         numberOfReturn: 0,
         startRecord: 1,
-        nextRecordPosition: null,
+        nextRecordPosition: 0,
         meetingRecord: [],
       }),
     } as Response);

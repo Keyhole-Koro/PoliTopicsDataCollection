@@ -1,3 +1,4 @@
+// Validates chunked-task lifecycle (create, chunk-ready updates, task completion) against LocalStack DynamoDB.
 import {
   CreateTableCommand,
   DeleteTableCommand,
@@ -12,9 +13,9 @@ import { DeleteCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
+import { applyLocalstackEnv, getLocalstackConfig } from '../testUtils/testEnv';
 
-const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL;
-const AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
+const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 const TABLE_NAME = process.env.LLM_TASK_TABLE || 'PoliTopics-llm-tasks';
 const CLEANUP_TABLE = process.env.CLEANUP_LOCALSTACK_CHUNK_TABLE === '1';
 const CLEANUP_RECORDS = process.env.CLEANUP_LOCALSTACK_CHUNK_RECORDS === '1';
@@ -109,7 +110,7 @@ async function ensureTasksTable(
   onCreate();
 }
 
-if (!LOCALSTACK_ENDPOINT) {
+if (!HAS_LOCALSTACK) {
   // eslint-disable-next-line jest/no-focused-tests
   describe.skip('TaskRepository chunked LocalStack test', () => {
     it('skipped because LOCALSTACK_URL is not set', () => {
@@ -118,15 +119,20 @@ if (!LOCALSTACK_ENDPOINT) {
   });
 } else {
   describe('TaskRepository chunked LocalStack test', () => {
+    const ORIGINAL_ENV = process.env;
     let dynamo: DynamoDBClient;
     let docClient: DynamoDBDocumentClient;
     let repository: TaskRepository;
     const insertedIssueIds: string[] = [];
     let tableCreatedByTest = false;
+    let awsRegion: string;
 
     beforeAll(async () => {
+      process.env = { ...ORIGINAL_ENV };
+      applyLocalstackEnv();
+      awsRegion = process.env.AWS_REGION || 'ap-northeast-3';
       dynamo = new DynamoDBClient({
-        region: AWS_REGION,
+        region: awsRegion,
         endpoint: LOCALSTACK_ENDPOINT,
         credentials: {
           accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
@@ -161,6 +167,7 @@ if (!LOCALSTACK_ENDPOINT) {
       }
 
       await dynamo.destroy();
+      process.env = ORIGINAL_ENV;
     });
 
     test('creates a chunked task in LocalStack DynamoDB', async () => {
@@ -180,8 +187,8 @@ if (!LOCALSTACK_ENDPOINT) {
       expect(chunkReady?.chunks[0].status).toBe('ready');
 
       await repository.markTaskSucceeded(issueID);
-    const succeeded = await repository.getTask(issueID);
-    expect(succeeded?.status).toBe('completed');
+      const succeeded = await repository.getTask(issueID);
+      expect(succeeded?.status).toBe('completed');
 
       console.log(`[LocalStack Chunk Test] Inserted task ${issueID} with ${chunkCount} chunks into ${TABLE_NAME}.`);
     }, 30000);

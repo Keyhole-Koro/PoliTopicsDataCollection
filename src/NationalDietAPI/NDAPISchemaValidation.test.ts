@@ -56,7 +56,10 @@ describe('fetchNationalDietRecords', () => {
       },
     });
 
-    const result = await fetchNationalDietRecords('https://example.com/api');
+    const result = await fetchNationalDietRecords('https://example.com/api', {
+      from: '2024-01-01',
+      until: '2024-01-31',
+    });
 
     expect(result.numberOfRecords).toBe(1);
     const meetings = result.meetingRecord ?? [];
@@ -68,6 +71,8 @@ describe('fetchNationalDietRecords', () => {
     const speeches = meeting.speechRecord ?? [];
     expect(speeches).toHaveLength(1);
     expect(speeches[0]?.speechOrder).toBe(5);
+    expect(speeches[0]?.createTime).toBe('2024-01-01');
+    expect(speeches[0]?.updateTime).toBe('2024-01-01');
   });
 
   test('handles empty responses without meetingRecord data', async () => {
@@ -78,7 +83,10 @@ describe('fetchNationalDietRecords', () => {
       nextRecordPosition: null,
     });
 
-    const result = await fetchNationalDietRecords('https://example.com/api');
+    const result = await fetchNationalDietRecords('https://example.com/api', {
+      from: '2024-01-01',
+      until: '2024-01-31',
+    });
     expect(result.numberOfRecords).toBe(0);
     expect(result.meetingRecord).toEqual([]);
     expect(result.nextRecordPosition).toBeNull();
@@ -121,6 +129,53 @@ describe('fetchNationalDietRecords', () => {
       ],
     });
 
-    await expect(fetchNationalDietRecords('https://example.com/api')).rejects.toThrow(ValiError);
+    await expect(fetchNationalDietRecords('https://example.com/api', {
+      from: '2024-01-01',
+      until: '2024-01-31',
+    })).rejects.toThrow(ValiError);
+  });
+  test('normalizes timestamp strings to YYYY-MM-DD', async () => {
+    mockFetchResponse({
+      numberOfRecords: 1,
+      numberOfReturn: 1,
+      startRecord: 1,
+      nextRecordPosition: 2,
+      meetingRecord: {
+        issueID: 'ISS-1',
+        imageKind: 'text',
+        searchObject: 1,
+        session: 1,
+        nameOfHouse: 'House',
+        nameOfMeeting: 'Budget Committee',
+        issue: 'Budget',
+        date: '2024-01-01',
+        closing: 'Adjourned',
+        speechRecord: [
+          {
+            speechID: 'sp-1',
+            speechOrder: 1,
+            speaker: 'Member A',
+            speakerYomi: null,
+            speakerGroup: null,
+            speakerPosition: null,
+            speakerRole: null,
+            speech: 'Hello',
+            startPage: 1,
+            createTime: '2025-11-18 23:04:25',
+            updateTime: '2025-11-19 09:41:33',
+            speechURL: 'https://example.com/speech',
+          },
+        ],
+      },
+    });
+
+    const result = await fetchNationalDietRecords('https://example.com/api', {
+      from: '2024-01-01',
+      until: '2024-01-31',
+    });
+
+    const meeting = result.meetingRecord?.[0];
+    expect(meeting?.speechRecord?.[0]?.createTime).toBe('2025-11-18');
+    expect(meeting?.speechRecord?.[0]?.updateTime).toBe('2025-11-19');
   });
 });

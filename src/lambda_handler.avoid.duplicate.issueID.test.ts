@@ -1,3 +1,5 @@
+// Regression suite for duplicate issueID handling: runs the Lambda against LocalStack S3/DynamoDB
+// to ensure pre-existing tasks short-circuit and do not enqueue duplicate work.
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import {
@@ -22,6 +24,7 @@ import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from '@
 import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
+import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
 
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
   Array.from({ length: count }, (_, idx) => ({
@@ -40,9 +43,9 @@ const buildSpeeches = (count: number): RawSpeechRecord[] => (
   }))
 );
 
-const LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_URL;
+const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 
-if (!LOCALSTACK_ENDPOINT) {
+if (!HAS_LOCALSTACK) {
   // eslint-disable-next-line jest/no-focused-tests
   describe.skip('lambda_handler duplicate issueID guard (LocalStack)', () => {
     it('skipped because LOCALSTACK_URL is not set', () => {
@@ -150,31 +153,31 @@ if (!LOCALSTACK_ENDPOINT) {
       jest.clearAllMocks();
       process.env = { ...ORIGINAL_ENV };
 
-      process.env.NATIONAL_DIET_API_ENDPOINT = 'https://mock.ndl.go.jp/api/meeting';
-      process.env.GEMINI_MAX_INPUT_TOKEN = '200';
-      process.env.GEMINI_API_KEY = 'fake-key';
-      process.env.RUN_API_KEY = 'secret';
-      process.env.PROMPT_BUCKET = bucketName;
-      process.env.LOCALSTACK_URL = LOCALSTACK_ENDPOINT;
-      process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
-      process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-3';
-      process.env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || 'test';
-      process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || 'test';
+      applyLambdaTestEnv({
+        NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
+        GEMINI_MAX_INPUT_TOKEN: '200',
+        PROMPT_BUCKET: bucketName,
+      });
+      applyLocalstackEnv();
       process.env.LLM_TASK_TABLE = tableName;
 
+      const awsRegion = process.env.AWS_REGION ?? 'ap-northeast-3';
+      const credentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
+      };
+
       s3 = new S3Client({
-        region: process.env.AWS_REGION,
+        region: awsRegion,
         endpoint: LOCALSTACK_ENDPOINT,
         forcePathStyle: true,
+        credentials,
       });
 
       dynamo = new DynamoDBClient({
-        region: process.env.AWS_REGION,
+        region: awsRegion,
         endpoint: LOCALSTACK_ENDPOINT,
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        },
+        credentials,
       });
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
 

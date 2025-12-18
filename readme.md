@@ -84,3 +84,7 @@ error/2025-08-11T14:05:12.100Z-<uuid>.json
 ```
 
 Cloud logs flow to CloudWatch in AWS or to your LocalStack logging output during local development.
+
+## Future Update
+
+check the updates by national diet api, store lastModification column into out dynamodb
