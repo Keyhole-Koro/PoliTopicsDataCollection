@@ -21,6 +21,7 @@ const collectSpeechesByIndex = (speeches: RawSpeechRecord[], indices: number[]):
 );
 
 const isoDate = (): string => new Date().toISOString().split('T')[0];
+const isoTimestamp = (): string => new Date().toISOString();
 
 export async function buildTasksForMeeting(args: {
   meeting: MeetingRecord;
@@ -87,7 +88,8 @@ export async function buildTasksForMeeting(args: {
 
   const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;
   const singleChunkMode = packs.length === 1 && !packs[0].oversized;
-  const createdAt = isoDate();
+  const createdAt = isoTimestamp();
+  const updatedAt = createdAt;
 
   if (singleChunkMode) {
     const pack = packs[0];
@@ -116,7 +118,7 @@ export async function buildTasksForMeeting(args: {
       llmModel: geminiModel,
       retryAttempts: 0,
       createdAt,
-      updatedAt: createdAt,
+      updatedAt,
       processingMode: 'single_chunk',
       prompt_url: `s3://${bucket}/${singleChunkPromptKey}`,
       meeting: meetingInfo,
@@ -191,7 +193,7 @@ export async function buildTasksForMeeting(args: {
     llmModel: geminiModel,
     retryAttempts: 0,
     createdAt,
-    updatedAt: createdAt,
+    updatedAt,
     processingMode: 'chunked',
     prompt_url: `s3://${bucket}/${reducePromptKey}`,
     meeting: meetingInfo,

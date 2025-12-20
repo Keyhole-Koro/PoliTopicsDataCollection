@@ -1,8 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VAR_FILE="${1:-$TF_DIR/tfvars/stage.tfvars}"
+TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TFVARS_DIR="$TF_DIR/tfvars"
+ENVIRONMENT_ARG="${1:-stage}"
+
+case "$ENVIRONMENT_ARG" in
+  local)
+    VAR_FILE="$TFVARS_DIR/localstack.tfvars"
+    ;;
+  stage)
+    VAR_FILE="$TFVARS_DIR/stage.tfvars"
+    ;;
+  prod)
+    VAR_FILE="$TFVARS_DIR/production.tfvars"
+    ;;
+  *)
+    if [[ -f "$ENVIRONMENT_ARG" ]]; then
+      VAR_FILE="$ENVIRONMENT_ARG"
+    else
+      echo "Usage: $(basename "$0") [local|stage|prod]" >&2
+      exit 1
+    fi
+    ;;
+esac
 
 if [[ ! -f "$VAR_FILE" ]]; then
   echo "Variable file not found: $VAR_FILE" >&2

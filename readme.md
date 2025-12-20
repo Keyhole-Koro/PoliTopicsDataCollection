@@ -50,7 +50,7 @@ ENDPOINT=...
 curl -H "x-api-key: $RUN_API_KEY" \
      -H "Content-Type: application/json" \
      -X POST "$ENDPOINT/run" \
-     -d '{"from":"2025-09-30","until":"2025-09-30"}'
+     -d '{"from":"2024-12-01","until":"2024-12-15"}'
 ```
 
 ## Create state bucket
