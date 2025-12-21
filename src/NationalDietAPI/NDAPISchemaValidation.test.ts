@@ -1,4 +1,5 @@
 import { ValiError } from 'valibot';
+import { setAppEnvironment, updateAppConfig } from '../config';
 
 import fetchNationalDietRecords from './NationalDietAPI';
 
@@ -17,6 +18,8 @@ describe('fetchNationalDietRecords', () => {
   beforeEach(() => {
     mockFetch.mockReset();
     global.fetch = mockFetch as unknown as typeof fetch;
+    setAppEnvironment('local');
+    updateAppConfig({ cache: {} });
   });
 
   afterEach(() => {

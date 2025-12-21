@@ -4,6 +4,7 @@ import { isHttpApiEvent, lowercaseHeaders } from '@utils/http';
 import { defaultCronRange, deriveRangeFromHttp, type RunRange } from '@utils/range';
 
 import { resJson } from './httpResponses';
+import { appConfig } from '../config';
 
 export function resolveRunRange(
   event: APIGatewayProxyEventV2 | ScheduledEvent,
@@ -11,7 +12,7 @@ export function resolveRunRange(
   if (isHttpApiEvent(event)) {
     console.log(`[HTTP ${event.requestContext.http.method} ${event.requestContext.http.path}]`);
     const headers = lowercaseHeaders(event.headers);
-    const expectedKey = process.env.RUN_API_KEY;
+    const expectedKey = appConfig.runApiKey;
     const providedKey = headers['x-api-key'];
     if (!expectedKey) {
       return resJson(500, { error: 'server_misconfigured', message: 'RUN_API_KEY is not set' });
@@ -34,12 +35,11 @@ export function resolveRunRange(
     case 'aws.events':
       return defaultCronRange();
     case 'local.events': {
-      const fromDate = process.env.FROM_DATE;
-      const untilDate = process.env.UNTIL_DATE;
-      if (!fromDate || !untilDate) {
-        throw new Error('FROM_DATE and UNTIL_DATE must be set for local events');
+      const range = appConfig.localRunRange;
+      if (!range) {
+        throw new Error('localRunRange must be set for local events');
       }
-      return { from: fromDate, until: untilDate };
+      return { from: range.from, until: range.until };
     }
     default:
       return resJson(400, { error: 'invalid_range', message: 'Could not determine run range.' });

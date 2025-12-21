@@ -14,11 +14,12 @@ import { DeleteCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig } from '../testUtils/testEnv';
+import { appConfig } from '../config';
 
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
-const TABLE_NAME = process.env.LLM_TASK_TABLE || 'PoliTopics-llm-tasks';
-const CLEANUP_TABLE = process.env.CLEANUP_LOCALSTACK_CHUNK_TABLE === '1';
-const CLEANUP_RECORDS = process.env.CLEANUP_LOCALSTACK_CHUNK_RECORDS === '1';
+let tableName = appConfig.llmTaskTable;
+const CLEANUP_TABLE = false;
+const CLEANUP_RECORDS = false;
 
 const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
 const EXPECTED_STATUS_INDEX_KEY: KeySchemaElement[] = [
@@ -76,13 +77,13 @@ async function ensureTasksTable(
   onCreate: () => void,
 ): Promise<void> {
   try {
-    const describe = await dynamo.send(new DescribeTableCommand({ TableName: TABLE_NAME }));
+    const describe = await dynamo.send(new DescribeTableCommand({ TableName: tableName }));
     if (tableMatchesExpectedSchema(describe.Table)) {
       return;
     }
-    console.warn(`[LocalStack Chunk Test] Table ${TABLE_NAME} schema mismatch; recreating.`);
-    await dynamo.send(new DeleteTableCommand({ TableName: TABLE_NAME }));
-    await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: TABLE_NAME });
+    console.warn(`[LocalStack Chunk Test] Table ${tableName} schema mismatch; recreating.`);
+    await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
+    await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
   } catch (error: any) {
     if (error?.name !== 'ResourceNotFoundException') {
       throw error;
@@ -90,7 +91,7 @@ async function ensureTasksTable(
   }
 
   await dynamo.send(new CreateTableCommand({
-    TableName: TABLE_NAME,
+    TableName: tableName,
     BillingMode: 'PAY_PER_REQUEST',
     AttributeDefinitions: [
       { AttributeName: 'pk', AttributeType: 'S' },
@@ -106,7 +107,7 @@ async function ensureTasksTable(
       },
     ],
   }));
-  await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: TABLE_NAME });
+  await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
   onCreate();
 }
 
@@ -130,27 +131,29 @@ if (!HAS_LOCALSTACK) {
     beforeAll(async () => {
       process.env = { ...ORIGINAL_ENV };
       applyLocalstackEnv();
-      awsRegion = process.env.AWS_REGION || 'ap-northeast-3';
+      tableName = appConfig.llmTaskTable;
+      awsRegion = appConfig.aws.region;
+      const credentials = appConfig.aws.credentials ?? {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
+      };
       dynamo = new DynamoDBClient({
         region: awsRegion,
         endpoint: LOCALSTACK_ENDPOINT,
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
-        },
+        credentials,
       });
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
 
       await ensureTasksTable(dynamo, () => { tableCreatedByTest = true; });
-      repository = new TaskRepository({ tableName: TABLE_NAME, client: docClient });
-      console.log(`[LocalStack Chunk Test] Using DynamoDB table ${TABLE_NAME}`);
+      repository = new TaskRepository({ tableName, client: docClient });
+      console.log(`[LocalStack Chunk Test] Using DynamoDB table ${tableName}`);
     }, 40000);
 
     afterAll(async () => {
       if (CLEANUP_RECORDS && insertedIssueIds.length) {
         for (const pk of insertedIssueIds) {
           try {
-            await docClient.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { pk } }));
+            await docClient.send(new DeleteCommand({ TableName: tableName, Key: { pk } }));
           } catch (error) {
             console.warn(`[LocalStack Chunk Test] Failed to delete ${pk}:`, error);
           }
@@ -160,10 +163,10 @@ if (!HAS_LOCALSTACK) {
       }
 
       if (tableCreatedByTest && CLEANUP_TABLE) {
-        await dynamo.send(new DeleteTableCommand({ TableName: TABLE_NAME }));
-        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: TABLE_NAME });
+        await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
+        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       } else if (tableCreatedByTest) {
-        console.log(`[LocalStack Chunk Test] Table ${TABLE_NAME} was created for this run and left intact.`);
+        console.log(`[LocalStack Chunk Test] Table ${tableName} was created for this run and left intact.`);
       }
 
       await dynamo.destroy();
@@ -190,7 +193,7 @@ if (!HAS_LOCALSTACK) {
       const succeeded = await repository.getTask(issueID);
       expect(succeeded?.status).toBe('completed');
 
-      console.log(`[LocalStack Chunk Test] Inserted task ${issueID} with ${chunkCount} chunks into ${TABLE_NAME}.`);
+      console.log(`[LocalStack Chunk Test] Inserted task ${issueID} with ${chunkCount} chunks into ${tableName}.`);
     }, 30000);
   });
 }

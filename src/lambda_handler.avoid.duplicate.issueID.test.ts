@@ -25,6 +25,7 @@ import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
+import { appConfig } from './config';
 
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
   Array.from({ length: count }, (_, idx) => ({
@@ -55,9 +56,9 @@ if (!HAS_LOCALSTACK) {
 } else {
   describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = process.env.PROMPT_BUCKET || 'politopics-prompts';
-    const tableName = process.env.LLM_TASK_TABLE || 'PoliTopics-llm-tasks';
-    const cleanupInsertedTasks = process.env.CLEANUP_DUPLICATE_TEST_TASKS === '1';
+    const bucketName = 'politopics-data-collection-prompts-local';
+    let tableName = 'politopics-llm-tasks-local';
+    const cleanupInsertedTasks = false;
 
     const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
     const EXPECTED_STATUS_INDEX_KEY: KeySchemaElement[] = [
@@ -157,14 +158,15 @@ if (!HAS_LOCALSTACK) {
         NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
         GEMINI_MAX_INPUT_TOKEN: '200',
         PROMPT_BUCKET: bucketName,
+        LLM_TASK_TABLE: tableName,
       });
       applyLocalstackEnv();
-      process.env.LLM_TASK_TABLE = tableName;
+      tableName = appConfig.llmTaskTable;
 
-      const awsRegion = process.env.AWS_REGION ?? 'ap-northeast-3';
-      const credentials = {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
+      const awsRegion = appConfig.aws.region;
+      const credentials = appConfig.aws.credentials ?? {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
       };
 
       s3 = new S3Client({
@@ -306,6 +308,14 @@ if (!HAS_LOCALSTACK) {
         } as any;
 
         await jest.isolateModulesAsync(async () => {
+          const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+          applyLambdaTestEnv({
+            NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
+            GEMINI_MAX_INPUT_TOKEN: '200',
+            PROMPT_BUCKET: bucketName,
+            LLM_TASK_TABLE: tableName,
+          });
+          applyLocalstackEnv();
           const { handler } = await import('./lambda_handler');
           const response = await handler(event, {} as any, () => undefined);
           expect(response.statusCode).toBe(200);

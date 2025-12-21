@@ -1,11 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-
-const CACHE_ENV_VAR = 'ND_API_HTTP_CACHE_DIR';
-const CACHE_BYPASS_ENV_VAR = 'ND_API_HTTP_BYPASS_CACHE';
+import { appConfig, consumeCacheBypass } from '../config';
 
 function getCachePath(url: string): { dir: string; file: string } | null {
-  const dir = process.env[CACHE_ENV_VAR];
+  const dir = appConfig.cache.dir;
   if (!dir) {
     return null;
   }
@@ -14,11 +12,7 @@ function getCachePath(url: string): { dir: string; file: string } | null {
 }
 
 function shouldBypassCache(): boolean {
-  if (process.env[CACHE_BYPASS_ENV_VAR] === '1') {
-    delete process.env[CACHE_BYPASS_ENV_VAR];
-    return true;
-  }
-  return false;
+  return consumeCacheBypass();
 }
 
 export async function readCachedPayload(url: string): Promise<unknown | null> {

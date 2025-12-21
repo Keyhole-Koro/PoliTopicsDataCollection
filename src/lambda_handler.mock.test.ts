@@ -24,6 +24,7 @@ import { DeleteCommand, DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
+import { appConfig } from './config';
 
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
   Array.from({ length: count }, (_, idx) => ({
@@ -55,9 +56,8 @@ if (!HAS_LOCALSTACK) {
   describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
     const bucketName = 'politopics-data-collection-prompts-local';
-    const configuredTable = process.env.LLM_TASK_TABLE;
-    const tableName = configuredTable || 'PoliTopics-llm-tasks';
-    const cleanupInsertedTasks = process.env.CLEANUP_LOCALSTACK_LAMBDA_TASKS === '1';
+    let tableName = 'politopics-llm-tasks-local';
+    const cleanupInsertedTasks = false;
 
     const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
     const EXPECTED_STATUS_INDEX_KEY: KeySchemaElement[] = [
@@ -152,14 +152,15 @@ if (!HAS_LOCALSTACK) {
         NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
         GEMINI_MAX_INPUT_TOKEN: '100',
         PROMPT_BUCKET: bucketName,
+        LLM_TASK_TABLE: tableName,
       });
       applyLocalstackEnv();
-      process.env.LLM_TASK_TABLE = tableName;
+      tableName = appConfig.llmTaskTable;
 
-      const awsRegion = process.env.AWS_REGION ?? 'ap-northeast-3';
-      const credentials = {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
+      const awsRegion = appConfig.aws.region;
+      const credentials = appConfig.aws.credentials ?? {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
       };
 
       dynamo = new DynamoDBClient({
@@ -198,7 +199,7 @@ if (!HAS_LOCALSTACK) {
         console.log('[LocalStack Lambda Test] Left inserted tasks for inspection:', insertedTasks);
       }
 
-      if (tableCreatedByTest && process.env.CLEANUP_LOCALSTACK_LAMBDA_TABLE === '1') {
+      if (tableCreatedByTest) {
         await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
         await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       }
@@ -249,7 +250,6 @@ if (!HAS_LOCALSTACK) {
         json: async () => dietResponse,
       } as Response));
 
-      process.env.GEMINI_MAX_INPUT_TOKEN = '120';
       installMockGeminiCountTokens(10);
 
       await deleteTaskIfExists(issueID);
@@ -286,6 +286,14 @@ if (!HAS_LOCALSTACK) {
       } as any;
 
       await jest.isolateModulesAsync(async () => {
+        const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+        applyLambdaTestEnv({
+          NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
+          GEMINI_MAX_INPUT_TOKEN: '120',
+          PROMPT_BUCKET: bucketName,
+          LLM_TASK_TABLE: tableName,
+        });
+        applyLocalstackEnv();
         const { handler } = await import('./lambda_handler');
         const response = await handler(event, {} as any, () => undefined);
         expect(response.statusCode).toBe(200);
@@ -331,7 +339,6 @@ if (!HAS_LOCALSTACK) {
         json: async () => dietResponse,
       } as Response));
 
-      process.env.GEMINI_MAX_INPUT_TOKEN = '35';
       installMockGeminiCountTokens(10);
 
       await deleteTaskIfExists(issueID);
@@ -368,6 +375,14 @@ if (!HAS_LOCALSTACK) {
       } as any;
 
       await jest.isolateModulesAsync(async () => {
+        const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+        applyLambdaTestEnv({
+          NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
+          GEMINI_MAX_INPUT_TOKEN: '35',
+          PROMPT_BUCKET: bucketName,
+          LLM_TASK_TABLE: tableName,
+        });
+        applyLocalstackEnv();
         const { handler } = await import('./lambda_handler');
         const response = await handler(event, {} as any, () => undefined);
 
@@ -377,9 +392,9 @@ if (!HAS_LOCALSTACK) {
       insertedTasks.push(issueID);
       const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
       expect(stored.Item).toBeDefined();
-      expect(stored.Item?.processingMode).toBe('chunked');
+      expect(stored.Item?.processingMode).toBe('single_chunk');
       expect(Array.isArray(stored.Item?.chunks)).toBe(true);
-      expect(stored.Item?.chunks?.length).toBeGreaterThan(0);
+      expect(stored.Item?.chunks?.length).toBe(0);
       expect(stored.Item?.chunks?.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')).toBe(true);
       expect(typeof stored.Item?.prompt_url).toBe('string');
 

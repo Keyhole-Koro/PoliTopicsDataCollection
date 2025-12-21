@@ -8,9 +8,10 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 import { getAwsClientConfig } from '@utils/aws';
+import { appConfig } from '../config';
 
 const STATUS_INDEX = 'StatusIndex';
-const DEFAULT_TABLE_NAME = process.env.LLM_TASK_TABLE || 'PoliTopics-llm-tasks';
+const DEFAULT_TABLE_NAME = appConfig.llmTaskTable;
 
 const nowIso = (): string => new Date().toISOString();
 

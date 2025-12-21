@@ -12,6 +12,7 @@ import {
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig } from '../testUtils/testEnv';
+import { appConfig } from '../config';
 
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 
@@ -65,14 +66,15 @@ if (!HAS_LOCALSTACK) {
     beforeAll(async () => {
       process.env = { ...ORIGINAL_ENV };
       applyLocalstackEnv();
-      awsRegion = process.env.AWS_REGION || 'ap-northeast-3';
+      awsRegion = appConfig.aws.region;
+      const credentials = appConfig.aws.credentials ?? {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
+      };
       client = new DynamoDBClient({
         region: awsRegion,
         endpoint: LOCALSTACK_ENDPOINT,
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
-        },
+        credentials,
       });
       docClient = DynamoDBDocumentClient.from(client, { marshallOptions: { removeUndefinedValues: true } });
       await client.send(new CreateTableCommand({

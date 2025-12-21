@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { S3Client } from '@aws-sdk/client-s3';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { appConfig } from '../config';
 
 export async function putJsonS3({ s3, bucket, key, body }: { s3: S3Client; bucket: string; key: string; body: unknown }) {
   const payload = JSON.stringify(body, null, 2);
@@ -18,7 +19,7 @@ export async function writeRunLog(args: {
   outDir?: string; // local dev target directory
 }) {
   const { kind, payload, s3, bucket, outDir } = args;
-  const isLocal = (process.env.APP_ENV || '').toLowerCase() === 'local';
+  const isLocal = appConfig.environment === 'local';
   const tsSafe = new Date().toISOString().replace(/[:]/g, '-');
   const fileName = `${tsSafe}-${crypto.randomUUID()}.json`;
 

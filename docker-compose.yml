@@ -7,13 +7,6 @@ services:
       - ./:/workspaces/app
     depends_on:
       - localstack
-    environment:
-      AWS_REGION: ap-northeast-3
-      AWS_DEFAULT_REGION: ap-northeast-3
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      LOCALSTACK_URL: http://localstack:4566
-      AWS_ENDPOINT_URL: http://localstack:4566
 
   localstack:
     image: localstack/localstack:latest

@@ -3,7 +3,6 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
-import { applyLambdaTestEnv } from './testUtils/testEnv';
 
 const createTaskMock = jest.fn();
 
@@ -56,9 +55,9 @@ describe('lambda_handler run endpoint', () => {
   });
 
   test('rejects requests without a valid x-api-key header', async () => {
-    applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
-
     await jest.isolateModulesAsync(async () => {
+      const { applyLambdaTestEnv } = await import('./testUtils/testEnv');
+      applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
       const { handler } = await import('./lambda_handler');
       const event = buildEvent();
       const response = await handler(event, {} as any, () => undefined);
@@ -69,8 +68,6 @@ describe('lambda_handler run endpoint', () => {
   });
 
   test('processes /run when the API key and dependencies are configured', async () => {
-    applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
-
     const fetchMock = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({
       ok: true,
       statusText: 'OK',
@@ -86,6 +83,8 @@ describe('lambda_handler run endpoint', () => {
     installMockGeminiCountTokens(10);
 
     await jest.isolateModulesAsync(async () => {
+      const { applyLambdaTestEnv } = await import('./testUtils/testEnv');
+      applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
       const { handler } = await import('./lambda_handler');
       const event = buildEvent();
       event.headers = { 'x-api-key': 'secret' };

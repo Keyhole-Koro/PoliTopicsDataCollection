@@ -1,5 +1,3 @@
-﻿import 'dotenv/config';
-
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { Handler, ScheduledEvent } from 'aws-lambda';
 
@@ -8,7 +6,8 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { chunk_prompt, reduce_prompt, single_chunk_prompt } from '@prompts/prompts';
-import { getAwsEndpoint, getAwsRegion } from '@utils/aws';
+import { getAwsS3ClientConfig } from '@utils/aws';
+import { appConfig } from './config';
 
 import { resJson, isApiResponse } from './lambda/httpResponses';
 import { fetchMeetingsForRange } from './lambda/meetings';
@@ -16,35 +15,16 @@ import { resolveRunRange } from './lambda/rangeResolver';
 import { buildTasksForMeeting } from './lambda/taskBuilder';
 import { TaskRepository } from '@DynamoDB/tasks';
 
-const requiredEnv = ['GEMINI_MAX_INPUT_TOKEN', 'GEMINI_API_KEY', 'PROMPT_BUCKET', 'NATIONAL_DIET_API_ENDPOINT'] as const;
-type RequiredEnv = typeof requiredEnv[number];
-
-const env: Record<RequiredEnv, string> = {} as Record<RequiredEnv, string>;
-for (const key of requiredEnv) {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`${key} is not set`);
-  }
-  env[key] = value;
-}
-
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const PROMPT_BUCKET = env.PROMPT_BUCKET;
+const PROMPT_BUCKET = appConfig.promptBucket;
 const RUN_ID_PLACEHOLDER = '';
-
-const awsRegion = getAwsRegion();
-const awsEndpoint = getAwsEndpoint();
-const s3 = new S3Client({
-  region: awsRegion,
-  ...(awsEndpoint ? { endpoint: awsEndpoint, forcePathStyle: true } : {}),
-});
+const s3 = new S3Client(getAwsS3ClientConfig());
 const taskRepo = new TaskRepository();
 
-const nationalDietApiEndpoint = env.NATIONAL_DIET_API_ENDPOINT;
+const nationalDietApiEndpoint = appConfig.nationalDietApiEndpoint;
 
-const geminiMaxInputToken: number = Number(env.GEMINI_MAX_INPUT_TOKEN);
-const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+const geminiMaxInputToken: number = appConfig.gemini.maxInputToken;
+const genAI = new GoogleGenerativeAI(appConfig.gemini.apiKey);
+const model = genAI.getGenerativeModel({ model: appConfig.gemini.model });
 
 async function countTokens(text: string): Promise<number> {
   const response = await model.countTokens({ contents: [{ role: 'user', parts: [{ text }] }] });
@@ -102,7 +82,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         availableTokens,
         range,
         bucket: PROMPT_BUCKET,
-        geminiModel: GEMINI_MODEL,
+        geminiModel: appConfig.gemini.model,
         s3,
         runId: RUN_ID_PLACEHOLDER,
         countTokens,

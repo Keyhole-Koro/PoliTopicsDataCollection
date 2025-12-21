@@ -1,15 +1,29 @@
+import type { S3ClientConfig } from "@aws-sdk/client-s3"
+import { appConfig } from "../config"
+
 export function getAwsRegion(): string {
-  return process.env.AWS_REGION || 'ap-northeast-3';
+  return appConfig.aws.region
 }
 
 export function getAwsEndpoint(): string | undefined {
-  const ep = process.env.AWS_ENDPOINT_URL;
-  return ep && ep.trim().length ? ep : undefined;
+  return appConfig.aws.endpoint
 }
 
-export function getAwsClientConfig(): { region: string; endpoint?: string } {
-  const region = getAwsRegion();
-  const endpoint = getAwsEndpoint();
-  return endpoint ? { region, endpoint } : { region };
+export function getAwsClientConfig(): {
+  region: string
+  endpoint?: string
+  credentials?: { accessKeyId: string; secretAccessKey: string }
+} {
+  const { region, endpoint, credentials } = appConfig.aws
+  return endpoint ? { region, endpoint, credentials } : { region, credentials }
 }
 
+export function getAwsS3ClientConfig(): S3ClientConfig {
+  const { region, endpoint, credentials, forcePathStyle } = appConfig.aws
+  return {
+    region,
+    endpoint,
+    credentials,
+    forcePathStyle,
+  }
+}

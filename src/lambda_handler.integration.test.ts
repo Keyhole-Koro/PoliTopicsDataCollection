@@ -18,6 +18,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
+import { appConfig, updateAppConfig } from './config';
 
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 
@@ -31,11 +32,9 @@ if (!HAS_LOCALSTACK) {
 } else {
   describe('lambda_handler integration using the real National Diet API with LocalStack S3/DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = process.env.PROMPT_BUCKET || 'politopics-prompts';
-    const configuredTable = process.env.LLM_TASK_TABLE;
-    const tableName = configuredTable || 'PoliTopics-llm-tasks';
-    const cleanupCreatedTable = process.env.CLEANUP_LOCALSTACK_TASK_TABLE === '1';
-    process.env.ND_API_HTTP_CACHE_DIR = '1';
+    const bucketName = 'politopics-data-collection-prompts-local';
+    let tableName = 'politopics-llm-tasks-local';
+    const cleanupCreatedTable = false;
     
     let dynamo: DynamoDBClient | undefined;
     let docClient: DynamoDBDocumentClient | undefined;
@@ -175,15 +174,16 @@ if (!HAS_LOCALSTACK) {
         NATIONAL_DIET_API_ENDPOINT: 'https://kokkai.ndl.go.jp/api/meeting',
         GEMINI_MAX_INPUT_TOKEN: '12000',
         PROMPT_BUCKET: bucketName,
+        LLM_TASK_TABLE: tableName,
       });
       applyLocalstackEnv();
-      process.env.LLM_TASK_TABLE = tableName;
-      process.env.ND_API_HTTP_CACHE_DIR = httpCacheDir;
+      tableName = appConfig.llmTaskTable;
+      updateAppConfig({ cache: { dir: httpCacheDir } });
 
-      const awsRegion = process.env.AWS_REGION ?? 'ap-northeast-3';
-      const credentials = {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
+      const awsRegion = appConfig.aws.region;
+      const credentials = appConfig.aws.credentials ?? {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
       };
 
       dynamo = new DynamoDBClient({
@@ -213,10 +213,7 @@ if (!HAS_LOCALSTACK) {
         console.log(`[LocalStack Integration] DynamoDB table ${tableName} existed prior to test; left untouched.`);
       }
 
-      delete process.env.AWS_ENDPOINT_URL;
-      delete process.env.LLM_TASK_TABLE;
-      delete process.env.ND_API_HTTP_CACHE_DIR;
-
+      updateAppConfig({ cache: {} });
       process.env = ORIGINAL_ENV;
     });
 
@@ -229,8 +226,8 @@ if (!HAS_LOCALSTACK) {
         const hadCacheAtStart = false;
         const runTimestamp = Date.now();
 
-        const from = process.env.ND_TEST_FROM ?? '2025-09-01';
-        const until = process.env.ND_TEST_UNTIL ?? '2025-09-30';
+        const from = '2025-09-01';
+        const until = '2025-09-30';
 
         const event: APIGatewayProxyEventV2 = {
           version: '2.0',
@@ -266,9 +263,18 @@ if (!HAS_LOCALSTACK) {
         await deleteAllTasks();
 
         await jest.isolateModulesAsync(async () => {
-          const { handler } = await import('./lambda_handler');
+          const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+          const { updateAppConfig } = await import('./config');
+          applyLambdaTestEnv({
+            NATIONAL_DIET_API_ENDPOINT: 'https://kokkai.ndl.go.jp/api/meeting',
+            GEMINI_MAX_INPUT_TOKEN: '12000',
+            PROMPT_BUCKET: bucketName,
+            LLM_TASK_TABLE: tableName,
+          });
+          applyLocalstackEnv();
+          updateAppConfig({ cache: { dir: httpCacheDir, bypassOnce: true } });
 
-          process.env.ND_API_HTTP_BYPASS_CACHE = '1';
+          const { handler } = await import('./lambda_handler');
 
           const firstResponse = await handler(event, {} as any, () => undefined);
           console.log('firstResponse:', firstResponse);
