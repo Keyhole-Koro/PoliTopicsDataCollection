@@ -56,8 +56,8 @@ describe('lambda_handler run endpoint', () => {
 
   test('rejects requests without a valid x-api-key header', async () => {
     await jest.isolateModulesAsync(async () => {
-      const { applyLambdaTestEnv } = await import('./testUtils/testEnv');
-      applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
+      const { applyLambdaTestEnv, DEFAULT_PROMPT_BUCKET } = await import('./testUtils/testEnv');
+      applyLambdaTestEnv({ PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET });
       const { handler } = await import('./lambda_handler');
       const event = buildEvent();
       const response = await handler(event, {} as any, () => undefined);
@@ -83,8 +83,8 @@ describe('lambda_handler run endpoint', () => {
     installMockGeminiCountTokens(10);
 
     await jest.isolateModulesAsync(async () => {
-      const { applyLambdaTestEnv } = await import('./testUtils/testEnv');
-      applyLambdaTestEnv({ PROMPT_BUCKET: 'politopics-data-collection-prompts-local' });
+      const { applyLambdaTestEnv, DEFAULT_PROMPT_BUCKET } = await import('./testUtils/testEnv');
+      applyLambdaTestEnv({ PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET });
       const { handler } = await import('./lambda_handler');
       const event = buildEvent();
       event.headers = { 'x-api-key': 'secret' };

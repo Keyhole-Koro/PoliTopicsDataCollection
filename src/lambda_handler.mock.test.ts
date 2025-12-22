@@ -23,7 +23,7 @@ import {
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
-import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
+import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
 
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
@@ -55,8 +55,8 @@ if (!HAS_LOCALSTACK) {
 } else {
   describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = 'politopics-data-collection-prompts-local';
-    let tableName = 'politopics-llm-tasks-local';
+    let bucketName = DEFAULT_PROMPT_BUCKET;
+    let tableName = DEFAULT_LLM_TASK_TABLE;
     const cleanupInsertedTasks = false;
 
     const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
@@ -144,42 +144,27 @@ if (!HAS_LOCALSTACK) {
     }
 
     beforeAll(async () => {
-      jest.resetModules();
-      jest.clearAllMocks();
-      process.env = { ...ORIGINAL_ENV };
+    // 1. Initialize S3 / DynamoDB clients pointing to LocalStack
+    s3 = new S3Client({
+      region: 'us-east-1',
+      endpoint: process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566',
+      forcePathStyle: true,
+      credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+    });
+    dynamo = new DynamoDBClient({
+      region: 'us-east-1',
+      endpoint: process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566',
+      credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+    });
+    docClient = DynamoDBDocumentClient.from(dynamo);
 
-      applyLambdaTestEnv({
-        NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
-        GEMINI_MAX_INPUT_TOKEN: '100',
-        PROMPT_BUCKET: bucketName,
-        LLM_TASK_TABLE: tableName,
-      });
-      applyLocalstackEnv();
-      tableName = appConfig.llmTaskTable;
+    bucketName = appConfig.promptBucket;
+    tableName = appConfig.llmTaskTable;
 
-      const awsRegion = appConfig.aws.region;
-      const credentials = appConfig.aws.credentials ?? {
-        accessKeyId: 'test',
-        secretAccessKey: 'test',
-      };
-
-      dynamo = new DynamoDBClient({
-        region: awsRegion,
-        endpoint: LOCALSTACK_ENDPOINT,
-        credentials,
-      });
-
-      docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
-      s3 = new S3Client({
-        region: awsRegion,
-        endpoint: LOCALSTACK_ENDPOINT,
-        forcePathStyle: true,
-        credentials,
-      });
-
-      await ensurePromptBucket();
-      await ensureTasksTable();
-    }, 40000);
+    // We assume the bucket and table are already created by Terraform/LocalStack initialization script.
+    // Ensure the table is empty or in a clean state if needed, or just proceed.
+    // For now, we assume the environment is ready.
+  });
 
     beforeEach(() => {
       jest.resetModules();
@@ -197,11 +182,6 @@ if (!HAS_LOCALSTACK) {
         }
       } else if (insertedTasks.length) {
         console.log('[LocalStack Lambda Test] Left inserted tasks for inspection:', insertedTasks);
-      }
-
-      if (tableCreatedByTest) {
-        await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       }
 
       await Promise.allSettled([
@@ -286,12 +266,12 @@ if (!HAS_LOCALSTACK) {
       } as any;
 
       await jest.isolateModulesAsync(async () => {
-        const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+        const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
         applyLambdaTestEnv({
           NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
           GEMINI_MAX_INPUT_TOKEN: '120',
-          PROMPT_BUCKET: bucketName,
-          LLM_TASK_TABLE: tableName,
+          PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
+          LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
         });
         applyLocalstackEnv();
         const { handler } = await import('./lambda_handler');
@@ -375,12 +355,12 @@ if (!HAS_LOCALSTACK) {
       } as any;
 
       await jest.isolateModulesAsync(async () => {
-        const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+        const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
         applyLambdaTestEnv({
           NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
           GEMINI_MAX_INPUT_TOKEN: '35',
-          PROMPT_BUCKET: bucketName,
-          LLM_TASK_TABLE: tableName,
+          PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
+          LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
         });
         applyLocalstackEnv();
         const { handler } = await import('./lambda_handler');

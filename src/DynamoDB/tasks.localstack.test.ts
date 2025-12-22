@@ -1,9 +1,6 @@
 // TaskRepository integration tests exercising the real DynamoDB API via LocalStack (create/query/update flows).
 import {
-  CreateTableCommand,
-  DeleteTableCommand,
   DynamoDBClient,
-  waitUntilTableExists,
 } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -11,7 +8,7 @@ import {
 
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
-import { applyLocalstackEnv, getLocalstackConfig } from '../testUtils/testEnv';
+import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
 
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
@@ -27,7 +24,7 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
     createdAt,
     updatedAt: createdAt,
     processingMode: args.chunkCount ? 'chunked' : 'single_chunk',
-    prompt_url: `s3://politopics/prompts/${args.issueID}_reduce.json`,
+    prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${args.issueID}_reduce.json`,
     meeting: {
       issueID: args.issueID,
       nameOfMeeting: 'Test Meeting',
@@ -36,12 +33,12 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
       numberOfSpeeches: args.chunkCount || 1,
       session: 208,
     },
-    result_url: `s3://politopics/results/${args.issueID}_reduce.json`,
+    result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${args.issueID}_reduce.json`,
     chunks: Array.from({ length: args.chunkCount }, (_, idx) => ({
       id: `CHUNK#${idx}`,
       prompt_key: `prompts/${args.issueID}_${idx}.json`,
-      prompt_url: `s3://politopics/prompts/${args.issueID}_${idx}.json`,
-      result_url: `s3://politopics/results/${args.issueID}_${idx}.json`,
+      prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${args.issueID}_${idx}.json`,
+      result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${args.issueID}_${idx}.json`,
       status: 'notReady' as const,
     })),
   };
@@ -57,7 +54,7 @@ if (!HAS_LOCALSTACK) {
 } else {
   describe('TaskRepository LocalStack integration', () => {
     const ORIGINAL_ENV = process.env;
-    const tableName = `politopics-llm-tasks-test-${Date.now()}`;
+    let tableName: string;
     let client: DynamoDBClient;
     let docClient: DynamoDBDocumentClient;
     let repository: TaskRepository;
@@ -66,6 +63,7 @@ if (!HAS_LOCALSTACK) {
     beforeAll(async () => {
       process.env = { ...ORIGINAL_ENV };
       applyLocalstackEnv();
+      tableName = appConfig.llmTaskTable;
       awsRegion = appConfig.aws.region;
       const credentials = appConfig.aws.credentials ?? {
         accessKeyId: 'test',
@@ -77,41 +75,17 @@ if (!HAS_LOCALSTACK) {
         credentials,
       });
       docClient = DynamoDBDocumentClient.from(client, { marshallOptions: { removeUndefinedValues: true } });
-      await client.send(new CreateTableCommand({
-        TableName: tableName,
-        BillingMode: 'PAY_PER_REQUEST',
-        AttributeDefinitions: [
-          { AttributeName: 'pk', AttributeType: 'S' },
-          { AttributeName: 'status', AttributeType: 'S' },
-          { AttributeName: 'createdAt', AttributeType: 'S' },
-        ],
-        KeySchema: [
-          { AttributeName: 'pk', KeyType: 'HASH' },
-        ],
-        GlobalSecondaryIndexes: [
-          {
-            IndexName: 'StatusIndex',
-            KeySchema: [
-              { AttributeName: 'status', KeyType: 'HASH' },
-              { AttributeName: 'createdAt', KeyType: 'RANGE' },
-            ],
-            Projection: { ProjectionType: 'ALL' },
-          },
-        ],
-      }));
-
-      await waitUntilTableExists({ client, maxWaitTime: 60 }, { TableName: tableName });
+      
       repository = new TaskRepository({ tableName, client: docClient });
     }, 20000);
 
     afterAll(async () => {
-      await client.send(new DeleteTableCommand({ TableName: tableName }));
       await client.destroy();
       process.env = ORIGINAL_ENV;
     });
 
     test('creates tasks with chunk metadata and lists pending items', async () => {
-      const issueID = 'TEST-ISSUE';
+      const issueID = `TEST-ISSUE-${Date.now()}`;
       await repository.createTask(createIssueTask({ issueID, chunkCount: 2 }));
 
       const pending = await repository.getNextPending(5);
@@ -123,7 +97,7 @@ if (!HAS_LOCALSTACK) {
     }, 20000);
 
     test('markChunkReady updates chunk status', async () => {
-      const issueID = 'TEST-CHUNK';
+      const issueID = `TEST-CHUNK-${Date.now()}`;
       await repository.createTask(createIssueTask({ issueID, chunkCount: 1 }));
 
       await repository.markChunkReady(issueID, 'CHUNK#0');
@@ -133,7 +107,7 @@ if (!HAS_LOCALSTACK) {
     }, 20000);
 
     test('markTaskSucceeded updates status', async () => {
-      const issueID = 'TEST-SUCCEED';
+      const issueID = `TEST-SUCCEED-${Date.now()}`;
       await repository.createTask(createIssueTask({ issueID, chunkCount: 0 }));
 
       const result = await repository.markTaskSucceeded(issueID);

@@ -1,4 +1,4 @@
-bucket                  = "politopics-data-collection-local-state-bucket"
+bucket                  = "politopics-data-collection-local-state"
 key                     = "politopics-data-collection/local.tfstate"
 region                  = "ap-northeast-3"
 endpoints = {

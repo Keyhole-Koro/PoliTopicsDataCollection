@@ -1,33 +1,10 @@
 import { ValiError } from 'valibot';
-import { setAppEnvironment, updateAppConfig } from '../config';
 
-import fetchNationalDietRecords from './NationalDietAPI';
+import { parseNationalDietResponse } from './NationalDietAPI';
 
-describe('fetchNationalDietRecords', () => {
-  const originalFetch = global.fetch;
-  const mockFetch = jest.fn();
-
-  const mockFetchResponse = (payload: unknown, ok = true, statusText = 'OK') => {
-    mockFetch.mockResolvedValue({
-      ok,
-      statusText,
-      json: async () => payload,
-    } as any);
-  };
-
-  beforeEach(() => {
-    mockFetch.mockReset();
-    global.fetch = mockFetch as unknown as typeof fetch;
-    setAppEnvironment('local');
-    updateAppConfig({ cache: {} });
-  });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
-  test('parses valid payloads and normalizes array fields', async () => {
-    mockFetchResponse({
+describe('parseNationalDietResponse', () => {
+  test('parses valid payloads and normalizes array fields', () => {
+    const mockData = {
       numberOfRecords: '1',
       numberOfReturn: '1',
       startRecord: 1,
@@ -57,12 +34,9 @@ describe('fetchNationalDietRecords', () => {
           speechURL: 'https://example.com/speech',
         },
       },
-    });
+    };
 
-    const result = await fetchNationalDietRecords('https://example.com/api', {
-      from: '2024-01-01',
-      until: '2024-01-31',
-    });
+    const result = parseNationalDietResponse(mockData);
 
     expect(result.numberOfRecords).toBe(1);
     const meetings = result.meetingRecord ?? [];
@@ -78,25 +52,22 @@ describe('fetchNationalDietRecords', () => {
     expect(speeches[0]?.updateTime).toBe('2024-01-01');
   });
 
-  test('handles empty responses without meetingRecord data', async () => {
-    mockFetchResponse({
+  test('handles empty responses without meetingRecord data', () => {
+    const mockData = {
       numberOfRecords: 0,
       numberOfReturn: 0,
       startRecord: 1,
       nextRecordPosition: null,
-    });
+    };
 
-    const result = await fetchNationalDietRecords('https://example.com/api', {
-      from: '2024-01-01',
-      until: '2024-01-31',
-    });
+    const result = parseNationalDietResponse(mockData);
     expect(result.numberOfRecords).toBe(0);
     expect(result.meetingRecord).toEqual([]);
     expect(result.nextRecordPosition).toBeNull();
   });
 
-  test('throws when payload does not satisfy schema', async () => {
-    mockFetchResponse({
+  test('throws when payload does not satisfy schema', () => {
+    const mockData = {
       numberOfRecords: 1,
       numberOfReturn: 1,
       startRecord: 1,
@@ -130,15 +101,12 @@ describe('fetchNationalDietRecords', () => {
           ],
         },
       ],
-    });
+    };
 
-    await expect(fetchNationalDietRecords('https://example.com/api', {
-      from: '2024-01-01',
-      until: '2024-01-31',
-    })).rejects.toThrow(ValiError);
+    expect(() => parseNationalDietResponse(mockData)).toThrow(ValiError);
   });
-  test('normalizes timestamp strings to YYYY-MM-DD', async () => {
-    mockFetchResponse({
+  test('normalizes timestamp strings to YYYY-MM-DD', () => {
+    const mockData = {
       numberOfRecords: 1,
       numberOfReturn: 1,
       startRecord: 1,
@@ -170,12 +138,9 @@ describe('fetchNationalDietRecords', () => {
           },
         ],
       },
-    });
+    };
 
-    const result = await fetchNationalDietRecords('https://example.com/api', {
-      from: '2024-01-01',
-      until: '2024-01-31',
-    });
+    const result = parseNationalDietResponse(mockData);
 
     const meeting = result.meetingRecord?.[0];
     expect(meeting?.speechRecord?.[0]?.createTime).toBe('2025-11-18');

@@ -1,11 +1,7 @@
 // Validates chunked-task lifecycle (create, chunk-ready updates, task completion) against LocalStack DynamoDB.
 import {
-  CreateTableCommand,
-  DeleteTableCommand,
   DescribeTableCommand,
   DynamoDBClient,
-  waitUntilTableExists,
-  waitUntilTableNotExists,
   type KeySchemaElement,
   type TableDescription,
 } from '@aws-sdk/client-dynamodb';
@@ -13,12 +9,11 @@ import { DeleteCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
-import { applyLocalstackEnv, getLocalstackConfig } from '../testUtils/testEnv';
+import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
 
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 let tableName = appConfig.llmTaskTable;
-const CLEANUP_TABLE = false;
 const CLEANUP_RECORDS = false;
 
 const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
@@ -52,7 +47,7 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
     createdAt,
     updatedAt: createdAt,
     processingMode: 'chunked',
-    prompt_url: `s3://politopics-prompts/prompts/${issueID}_reduce.json`,
+    prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${issueID}_reduce.json`,
     meeting: {
       issueID,
       nameOfMeeting: 'Chunk Test Meeting',
@@ -61,55 +56,16 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
       numberOfSpeeches: chunkCount,
       session: 208,
     },
-    result_url: `s3://politopics-prompts/results/${issueID}_reduce.json`,
+    result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${issueID}_reduce.json`,
     chunks: Array.from({ length: chunkCount }, (_, idx) => ({
       id: `CHUNK#${idx}`,
       prompt_key: `prompts/${issueID}_${idx}.json`,
-      prompt_url: `s3://politopics-prompts/prompts/${issueID}_${idx}.json`,
-      result_url: `s3://politopics-prompts/results/${issueID}_${idx}.json`,
+      prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${issueID}_${idx}.json`,
+      result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${issueID}_${idx}.json`,
       status: 'notReady' as const,
     })),
   };
 };
-
-async function ensureTasksTable(
-  dynamo: DynamoDBClient,
-  onCreate: () => void,
-): Promise<void> {
-  try {
-    const describe = await dynamo.send(new DescribeTableCommand({ TableName: tableName }));
-    if (tableMatchesExpectedSchema(describe.Table)) {
-      return;
-    }
-    console.warn(`[LocalStack Chunk Test] Table ${tableName} schema mismatch; recreating.`);
-    await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-    await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-  } catch (error: any) {
-    if (error?.name !== 'ResourceNotFoundException') {
-      throw error;
-    }
-  }
-
-  await dynamo.send(new CreateTableCommand({
-    TableName: tableName,
-    BillingMode: 'PAY_PER_REQUEST',
-    AttributeDefinitions: [
-      { AttributeName: 'pk', AttributeType: 'S' },
-      { AttributeName: 'status', AttributeType: 'S' },
-      { AttributeName: 'createdAt', AttributeType: 'S' },
-    ],
-    KeySchema: EXPECTED_PRIMARY_KEY,
-    GlobalSecondaryIndexes: [
-      {
-        IndexName: 'StatusIndex',
-        KeySchema: EXPECTED_STATUS_INDEX_KEY,
-        Projection: { ProjectionType: 'ALL' },
-      },
-    ],
-  }));
-  await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-  onCreate();
-}
 
 if (!HAS_LOCALSTACK) {
   // eslint-disable-next-line jest/no-focused-tests
@@ -125,7 +81,6 @@ if (!HAS_LOCALSTACK) {
     let docClient: DynamoDBDocumentClient;
     let repository: TaskRepository;
     const insertedIssueIds: string[] = [];
-    let tableCreatedByTest = false;
     let awsRegion: string;
 
     beforeAll(async () => {
@@ -144,7 +99,6 @@ if (!HAS_LOCALSTACK) {
       });
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
 
-      await ensureTasksTable(dynamo, () => { tableCreatedByTest = true; });
       repository = new TaskRepository({ tableName, client: docClient });
       console.log(`[LocalStack Chunk Test] Using DynamoDB table ${tableName}`);
     }, 40000);
@@ -160,13 +114,6 @@ if (!HAS_LOCALSTACK) {
         }
       } else if (insertedIssueIds.length) {
         console.log('[LocalStack Chunk Test] Left inserted tasks for inspection:', insertedIssueIds);
-      }
-
-      if (tableCreatedByTest && CLEANUP_TABLE) {
-        await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-      } else if (tableCreatedByTest) {
-        console.log(`[LocalStack Chunk Test] Table ${tableName} was created for this run and left intact.`);
       }
 
       await dynamo.destroy();

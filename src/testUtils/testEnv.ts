@@ -3,9 +3,10 @@ import { appConfig, setAppConfig, setAppEnvironment, updateAppConfig } from "../
 
 export type EnvMap = Record<string, string | undefined>
 
-const DEFAULT_PROMPT_BUCKET = "politopics-data-collection-prompts-test"
-const DEFAULT_ND_ENDPOINT = "https://kokkai.ndl.go.jp/api/meeting"
-const DEFAULT_LOCALSTACK_URL = "http://localstack:4566"
+export const DEFAULT_PROMPT_BUCKET = "politopics-prompts"
+export const DEFAULT_ND_ENDPOINT = "https://kokkai.ndl.go.jp/api/meeting"
+export const DEFAULT_LOCALSTACK_URL = "http://localstack:4566"
+export const DEFAULT_LLM_TASK_TABLE = "politopics-llm-tasks-local"
 
 const BASE_CONFIG: AppConfig = {
   ...appConfig,
@@ -20,6 +21,7 @@ const LAMBDA_ENV_DEFAULTS: EnvMap = {
   GEMINI_API_KEY: "fake-key",
   PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
   NATIONAL_DIET_API_ENDPOINT: DEFAULT_ND_ENDPOINT,
+  LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
 }
 
 const LOCALSTACK_ENV_DEFAULTS: EnvMap = {
@@ -119,10 +121,4 @@ export function getLocalstackConfig(): { endpoint: string; configured: boolean }
     endpoint,
     configured: Boolean(appConfig.aws.endpoint),
   }
-}
-
-export const TEST_DEFAULTS = {
-  PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
-  NATIONAL_DIET_ENDPOINT: DEFAULT_ND_ENDPOINT,
-  LOCALSTACK_URL: DEFAULT_LOCALSTACK_URL,
 }

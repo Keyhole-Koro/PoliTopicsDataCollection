@@ -1,12 +1,8 @@
 // Full integration flow: fetches live ND API data, persists prompts + tasks to LocalStack, and
 // dumps artifacts for inspection to ensure end-to-end behavior works with real upstream data.
 import {
-  CreateTableCommand,
-  DeleteTableCommand,
   DescribeTableCommand,
   DynamoDBClient,
-  waitUntilTableExists,
-  waitUntilTableNotExists,
 } from '@aws-sdk/client-dynamodb';
 import type { KeySchemaElement, TableDescription } from '@aws-sdk/client-dynamodb';
 import { BatchWriteCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
@@ -17,7 +13,7 @@ import path from 'node:path';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
-import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
+import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig, updateAppConfig } from './config';
 
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
@@ -32,13 +28,11 @@ if (!HAS_LOCALSTACK) {
 } else {
   describe('lambda_handler integration using the real National Diet API with LocalStack S3/DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = 'politopics-data-collection-prompts-local';
-    let tableName = 'politopics-llm-tasks-local';
-    const cleanupCreatedTable = false;
+    const bucketName = DEFAULT_PROMPT_BUCKET;
+    let tableName = DEFAULT_LLM_TASK_TABLE;
     
     let dynamo: DynamoDBClient | undefined;
     let docClient: DynamoDBDocumentClient | undefined;
-    let tableCreatedByTest = false;
 
     const artifactsDir = path.join(process.cwd(), 'localstack-artifacts');
     const httpCacheDir = path.join(artifactsDir, 'ndapi-cache');
@@ -72,66 +66,6 @@ if (!HAS_LOCALSTACK) {
         return false;
       }
       return keySchemaMatches(statusIndex.KeySchema, EXPECTED_STATUS_INDEX_KEY);
-    }
-
-    async function createTasksTable(): Promise<void> {
-      if (!dynamo) {
-        return;
-      }
-      await dynamo.send(new CreateTableCommand({
-        TableName: tableName,
-        BillingMode: 'PAY_PER_REQUEST',
-        AttributeDefinitions: [
-          { AttributeName: 'pk', AttributeType: 'S' },
-          { AttributeName: 'status', AttributeType: 'S' },
-          { AttributeName: 'createdAt', AttributeType: 'S' },
-        ],
-        KeySchema: EXPECTED_PRIMARY_KEY,
-        GlobalSecondaryIndexes: [
-          {
-            IndexName: 'StatusIndex',
-            KeySchema: EXPECTED_STATUS_INDEX_KEY,
-            Projection: { ProjectionType: 'ALL' },
-          },
-        ],
-      }));
-      await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-    }
-
-    async function ensureTasksTable(): Promise<void> {
-      if (!dynamo) {
-        return;
-      }
-      try {
-        const describe = await dynamo.send(new DescribeTableCommand({ TableName: tableName }));
-        if (!tableMatchesExpectedSchema(describe.Table)) {
-          console.warn(`[LocalStack Integration] Table ${tableName} schema mismatch; recreating for integration test.`);
-          await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-          await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-          await createTasksTable();
-          tableCreatedByTest = true;
-        }
-      } catch (error: any) {
-        if (error?.name !== 'ResourceNotFoundException') {
-          throw error;
-        }
-        await createTasksTable();
-        tableCreatedByTest = true;
-      }
-    }
-
-    async function deleteTable(): Promise<void> {
-      if (!dynamo) {
-        return;
-      }
-      try {
-        await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-      } catch (error) {
-        console.warn('Failed to delete LocalStack DynamoDB table:', error);
-      } finally {
-        await dynamo.destroy();
-      }
     }
 
     async function fetchAllTasks(): Promise<any[]> {
@@ -197,22 +131,10 @@ if (!HAS_LOCALSTACK) {
       if (!existsSync(httpCacheDir)) {
         mkdirSync(httpCacheDir, { recursive: true });
       }
-      await ensureTasksTable();
     }, 40000);
 
     afterAll(async () => {
-      if (tableCreatedByTest) {
-        if (cleanupCreatedTable) {
-          await deleteTable();
-        } else {
-          console.log(`[LocalStack Integration] Leaving created DynamoDB table ${tableName} for manual inspection.`);
-          await dynamo?.destroy();
-        }
-      } else {
-        await dynamo?.destroy();
-        console.log(`[LocalStack Integration] DynamoDB table ${tableName} existed prior to test; left untouched.`);
-      }
-
+      await dynamo?.destroy();
       updateAppConfig({ cache: {} });
       process.env = ORIGINAL_ENV;
     });
@@ -263,13 +185,13 @@ if (!HAS_LOCALSTACK) {
         await deleteAllTasks();
 
         await jest.isolateModulesAsync(async () => {
-          const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+          const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
           const { updateAppConfig } = await import('./config');
           applyLambdaTestEnv({
             NATIONAL_DIET_API_ENDPOINT: 'https://kokkai.ndl.go.jp/api/meeting',
             GEMINI_MAX_INPUT_TOKEN: '12000',
-            PROMPT_BUCKET: bucketName,
-            LLM_TASK_TABLE: tableName,
+            PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
+            LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
           });
           applyLocalstackEnv();
           updateAppConfig({ cache: { dir: httpCacheDir, bypassOnce: true } });

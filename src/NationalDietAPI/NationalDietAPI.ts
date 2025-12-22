@@ -67,6 +67,12 @@ function normalizeDateOnly(value: unknown): string | undefined {
   return parsed.toISOString().split('T')[0];
 }
 
+export function parseNationalDietResponse(payload: unknown): RawMeetingData {
+  const normalizedPayload = normalizePayloadShape(payload);
+  const parsed = parse(rawMeetingDataSchema, normalizedPayload);
+  return { ...parsed, meetingRecord: parsed.meetingRecord ?? [] };
+}
+
 export interface FetchParams {
     from?: string;
     until?: string;
@@ -109,9 +115,7 @@ async function fetchNationalDietRecords(
       await writeCachedPayload(url, payload);
     }
 
-    const normalizedPayload = normalizePayloadShape(payload);
-    const parsed = parse(rawMeetingDataSchema, normalizedPayload);
-    return { ...parsed, meetingRecord: parsed.meetingRecord ?? [] };
+    return parseNationalDietResponse(payload);
   } catch (error) {
     console.error('Failed to fetch records:', error);
     throw error;

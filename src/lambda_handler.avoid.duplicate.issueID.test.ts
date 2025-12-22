@@ -3,19 +3,11 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import {
-  CreateBucketCommand,
-  DeleteBucketCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
-  CreateTableCommand,
-  DeleteTableCommand,
   DescribeTableCommand,
   DynamoDBClient,
-  waitUntilTableExists,
-  waitUntilTableNotExists,
   type KeySchemaElement,
   type TableDescription,
 } from '@aws-sdk/client-dynamodb';
@@ -24,7 +16,7 @@ import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from '@
 import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
 
 import { installMockGeminiCountTokens } from './testUtils/mockApis';
-import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig } from './testUtils/testEnv';
+import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
 
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
@@ -56,8 +48,8 @@ if (!HAS_LOCALSTACK) {
 } else {
   describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
     const ORIGINAL_ENV = process.env;
-    const bucketName = 'politopics-data-collection-prompts-local';
-    let tableName = 'politopics-llm-tasks-local';
+    const bucketName = DEFAULT_PROMPT_BUCKET;
+    let tableName = DEFAULT_LLM_TASK_TABLE;
     const cleanupInsertedTasks = false;
 
     const EXPECTED_PRIMARY_KEY: KeySchemaElement[] = [{ AttributeName: 'pk', KeyType: 'HASH' }];
@@ -70,8 +62,6 @@ if (!HAS_LOCALSTACK) {
     let docClient: DynamoDBDocumentClient;
     let s3: S3Client;
     const insertedTasks: string[] = [];
-    let bucketCreatedByTest = false;
-    let tableCreatedByTest = false;
 
     const schemaMatches = (actual: KeySchemaElement[] | undefined, expected: KeySchemaElement[]): boolean => (
       Boolean(actual) &&
@@ -86,68 +76,6 @@ if (!HAS_LOCALSTACK) {
       const statusIndex = (table.GlobalSecondaryIndexes || []).find((index) => index.IndexName === 'StatusIndex');
       return Boolean(statusIndex && schemaMatches(statusIndex.KeySchema, EXPECTED_STATUS_INDEX_KEY));
     };
-
-    async function ensureBucket(): Promise<void> {
-      try {
-        await s3.send(new CreateBucketCommand({
-          Bucket: bucketName,
-        }));
-        bucketCreatedByTest = true;
-      } catch (error: any) {
-        if (!['BucketAlreadyOwnedByYou', 'BucketAlreadyExists'].includes(error?.name)) {
-          throw error;
-        }
-      }
-    }
-
-    async function emptyBucket(): Promise<void> {
-      try {
-        const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucketName }));
-        for (const item of listed.Contents || []) {
-          if (item.Key) {
-            await s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: item.Key }));
-          }
-        }
-      } catch (error) {
-        console.warn('[DuplicateIssueTest] Failed to clean up bucket objects:', error);
-      }
-    }
-
-    async function ensureTasksTable(): Promise<void> {
-      try {
-        const describe = await dynamo.send(new DescribeTableCommand({ TableName: tableName }));
-        if (tableMatchesExpectedSchema(describe.Table)) {
-          return;
-        }
-        console.warn(`[DuplicateIssueTest] Table ${tableName} schema mismatch; recreating.`);
-        await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-      } catch (error: any) {
-        if (error?.name !== 'ResourceNotFoundException') {
-          throw error;
-        }
-      }
-
-      await dynamo.send(new CreateTableCommand({
-        TableName: tableName,
-        BillingMode: 'PAY_PER_REQUEST',
-        AttributeDefinitions: [
-          { AttributeName: 'pk', AttributeType: 'S' },
-          { AttributeName: 'status', AttributeType: 'S' },
-          { AttributeName: 'createdAt', AttributeType: 'S' },
-        ],
-        KeySchema: EXPECTED_PRIMARY_KEY,
-        GlobalSecondaryIndexes: [
-          {
-            IndexName: 'StatusIndex',
-            KeySchema: EXPECTED_STATUS_INDEX_KEY,
-            Projection: { ProjectionType: 'ALL' },
-          },
-        ],
-      }));
-      await waitUntilTableExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
-      tableCreatedByTest = true;
-    }
 
     beforeAll(async () => {
       jest.resetModules();
@@ -182,9 +110,6 @@ if (!HAS_LOCALSTACK) {
         credentials,
       });
       docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
-
-      await ensureBucket();
-      await ensureTasksTable();
     }, 40000);
 
     afterAll(async () => {
@@ -198,19 +123,6 @@ if (!HAS_LOCALSTACK) {
         }
       } else if (insertedTasks.length) {
         console.log('[DuplicateIssueTest] Left inserted tasks for inspection:', insertedTasks);
-      }
-
-      if (bucketCreatedByTest) {
-        await emptyBucket();
-        try {
-          await s3.send(new DeleteBucketCommand({ Bucket: bucketName }));
-        } catch (error) {
-          console.warn('[DuplicateIssueTest] Failed to delete bucket:', error);
-        }
-      }
-      if (tableCreatedByTest) {
-        await dynamo.send(new DeleteTableCommand({ TableName: tableName }));
-        await waitUntilTableNotExists({ client: dynamo, maxWaitTime: 60 }, { TableName: tableName });
       }
 
       await dynamo.destroy();
@@ -308,12 +220,12 @@ if (!HAS_LOCALSTACK) {
         } as any;
 
         await jest.isolateModulesAsync(async () => {
-          const { applyLambdaTestEnv, applyLocalstackEnv } = await import('./testUtils/testEnv');
+          const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
           applyLambdaTestEnv({
             NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
             GEMINI_MAX_INPUT_TOKEN: '200',
-            PROMPT_BUCKET: bucketName,
-            LLM_TASK_TABLE: tableName,
+            PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
+            LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
           });
           applyLocalstackEnv();
           const { handler } = await import('./lambda_handler');

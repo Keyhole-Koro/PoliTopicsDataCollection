@@ -37,7 +37,7 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       maxInputToken: 4096,
       model: "gemini-2.5-flash",
     },
-    promptBucket: "politopics-data-collection-prompts-local",
+    promptBucket: "politopics-prompts",
     llmTaskTable: "politopics-llm-tasks-local",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
     runApiKey: "local-dev",

@@ -133,7 +133,18 @@ run_import() {
     fi
 
     echo "import -> $address :: $identifier"
-    terraform import -var-file="$VAR_FILE" -no-color "$address" "$identifier"
+    set +e
+    import_output="$(terraform import -var-file="$VAR_FILE" -no-color "$address" "$identifier" 2>&1)"
+    import_status=$?
+    set -e
+    if [[ $import_status -ne 0 ]]; then
+      if echo "$import_output" | grep -q "Cannot import non-existent remote object"; then
+        echo "skip   -> $address (missing remote object)" >&2
+        return
+      fi
+      echo "$import_output" >&2
+      exit "$import_status"
+    fi
   )
 }
 
