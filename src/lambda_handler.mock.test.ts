@@ -146,15 +146,15 @@ if (!HAS_LOCALSTACK) {
     beforeAll(async () => {
     // 1. Initialize S3 / DynamoDB clients pointing to LocalStack
     s3 = new S3Client({
-      region: 'us-east-1',
-      endpoint: process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566',
-      forcePathStyle: true,
-      credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+      region: appConfig.aws.region,
+      endpoint: appConfig.aws.endpoint,
+      forcePathStyle: appConfig.aws.forcePathStyle,
+      credentials: appConfig.aws.credentials,
     });
     dynamo = new DynamoDBClient({
-      region: 'us-east-1',
-      endpoint: process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566',
-      credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+      region: appConfig.aws.region,
+      endpoint: appConfig.aws.endpoint,
+      credentials: appConfig.aws.credentials,
     });
     docClient = DynamoDBDocumentClient.from(dynamo);
 

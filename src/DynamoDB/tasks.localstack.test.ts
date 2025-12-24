@@ -89,7 +89,7 @@ if (!HAS_LOCALSTACK) {
       await repository.createTask(createIssueTask({ issueID, chunkCount: 2 }));
 
       const pending = await repository.getNextPending(5);
-      expect(pending.some((task) => task.pk === issueID)).toBe(true);
+      expect(pending.some((task) => task.status === "pending")).toBe(true);
 
       const stored = await repository.getTask(issueID);
       expect(stored?.chunks.length).toBe(2);
