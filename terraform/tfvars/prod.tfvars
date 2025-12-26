@@ -1,9 +1,9 @@
-aws_region        = "ap-northeast-3"
+aws_region          = "ap-northeast-3"
 environment         = "production"
 service_name        = "politopics"
-prompt_bucket_name  = "politopics-data-collection-prompts-production"
-error_bucket_name   = "politopics-data-collection-errors-production"
-llm_task_table_name = "politopics-llm-tasks-production"
+prompt_bucket_name  = "politopics-data-collection-prompts-prod"
+error_bucket_name   = "politopics-data-collection-errors-prod"
+llm_task_table_name = "politopics-llm-tasks-prod"
 lambda_memory_mb    = 128
 lambda_timeout_sec  = 300
 schedule_expression = "cron(0 22 * * ? *)"

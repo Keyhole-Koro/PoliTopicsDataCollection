@@ -31,7 +31,7 @@ describe('parseNationalDietResponse', () => {
           startPage: '1',
           createTime: '2024-01-01T00:00:00Z',
           updateTime: '2024-01-01T00:00:00Z',
-          speechURL: 'https://example.com/speech',
+          speechURL: '://exahttpsmple.com/speech',
         },
       },
     };

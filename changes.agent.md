@@ -14,6 +14,11 @@ Topic: Ignore missing resources during import
 Details:
 - Updated the DataCollection Terraform import script to skip missing remote objects instead of failing.
 
+### Changes After Review
+- Also skip missing configuration/resource errors during Terraform import.
+- Files changed:
+  - `PoliTopicsDataCollection/terraform/scripts/import_all.sh`
+
 Agent: Gemini
 Date/Time: 2025-12-22 13:00 JST
 Keywords: s3, config, localstack

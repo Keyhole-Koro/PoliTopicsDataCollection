@@ -142,6 +142,14 @@ run_import() {
         echo "skip   -> $address (missing remote object)" >&2
         return
       fi
+      if echo "$import_output" | grep -q "Configuration for import target does not exist"; then
+        echo "skip   -> $address (missing configuration)" >&2
+        return
+      fi
+      if echo "$import_output" | grep -q "couldn't find resource"; then
+        echo "skip   -> $address (missing resource)" >&2
+        return
+      fi
       echo "$import_output" >&2
       exit "$import_status"
     fi
