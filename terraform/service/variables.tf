@@ -2,6 +2,10 @@ variable "environment" {
   type = string
 }
 
+variable "app_environment" {
+  type = string
+}
+
 variable "service_name" {
   type = string
 }
@@ -30,6 +34,18 @@ variable "environment_variables" {
 variable "secret_environment_variables" {
   type    = map(string)
   default = {}
+}
+
+variable "gemini_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "run_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
 }
 
 variable "schedule_expression" {

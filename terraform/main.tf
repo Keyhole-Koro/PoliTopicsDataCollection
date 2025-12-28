@@ -11,6 +11,7 @@ module "service" {
   source = "./service"
 
   environment                  = var.environment
+  app_environment              = var.app_environment
   service_name                 = var.service_name
   prompt_bucket_name           = var.prompt_bucket_name
   error_bucket_name            = var.error_bucket_name
@@ -19,6 +20,8 @@ module "service" {
   lambda_timeout_sec           = var.lambda_timeout_sec
   environment_variables        = var.environment_variables
   secret_environment_variables = var.secret_environment_variables
+  gemini_api_key               = var.gemini_api_key
+  run_api_key                  = var.run_api_key
   schedule_expression          = var.schedule_expression
   tags                         = var.tags
   lambda_package_dir           = local.lambda_package_dir

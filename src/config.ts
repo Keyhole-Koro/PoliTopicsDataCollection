@@ -33,14 +33,14 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       credentials: { accessKeyId: "test", secretAccessKey: "test" },
     },
     gemini: {
-      apiKey: "local-dev-key",
+      apiKey: requireEnv("GEMINI_API_KEY"),
       maxInputToken: 4096,
       model: "gemini-2.5-flash",
     },
     promptBucket: "politopics-prompts",
     llmTaskTable: "politopics-llm-tasks-local",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
-    runApiKey: "local-dev",
+    runApiKey: requireEnv("RUN_API_KEY"),
     localRunRange: { from: "2025-09-01", until: "2025-09-30" },
     cache: {},
   },
@@ -49,14 +49,14 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       region: "ap-northeast-3",
     },
     gemini: {
-      apiKey: "REPLACE_ME",
+      apiKey: requireEnv("GEMINI_API_KEY"),
       maxInputToken: 100000,
       model: "gemini-2.5-flash",
     },
     promptBucket: "politopics-data-collection-prompts-stage",
     llmTaskTable: "politopics-llm-tasks-stage",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
-    runApiKey: "REPLACE_ME",
+    runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
   },
   prod: {
@@ -64,19 +64,19 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       region: "ap-northeast-3",
     },
     gemini: {
-      apiKey: "REPLACE_ME",
+      apiKey: requireEnv("GEMINI_API_KEY"),
       maxInputToken: 100000,
       model: "gemini-2.5-flash",
     },
-    promptBucket: "politopics-data-collection-prompts-production",
-    llmTaskTable: "politopics-llm-tasks-production",
+    promptBucket: "politopics-data-collection-prompts-prod",
+    llmTaskTable: "politopics-llm-tasks-prod",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
-    runApiKey: "REPLACE_ME",
+    runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
   },
 }
 
-const ACTIVE_ENVIRONMENT: AppEnvironment = "local"
+const ACTIVE_ENVIRONMENT: AppEnvironment = resolveEnvironment()
 
 export let appConfig: AppConfig = {
   environment: ACTIVE_ENVIRONMENT,
@@ -111,4 +111,22 @@ export function consumeCacheBypass(): boolean {
     cache: { ...appConfig.cache, bypassOnce: false },
   }
   return true
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim() === "") {
+    throw new Error(`Environment variable ${name} is required`)
+  }
+  return value
+}
+
+function resolveEnvironment(): AppEnvironment {
+  const value = process.env.APP_ENVIRONMENT ?? "local"
+  if (value === "local" || value === "stage" || value === "prod") {
+    return value
+  }
+  throw new Error(
+    `Environment variable APP_ENVIRONMENT must be one of local, stage, prod (received: ${value})`,
+  )
 }

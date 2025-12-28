@@ -8,6 +8,12 @@ variable "environment" {
   type        = string
 }
 
+variable "app_environment" {
+  description = "Application environment identifier (local, stage, prod)"
+  type        = string
+  default     = "local"
+}
+
 variable "service_name" {
   description = "Logical name for this service"
   type        = string
@@ -45,6 +51,20 @@ variable "secret_environment_variables" {
   description = "Sensitive environment variables for the Lambda function (set via TF_VAR or CI secrets)"
   type        = map(string)
   default     = {}
+}
+
+variable "gemini_api_key" {
+  description = "API key for accessing the Gemini API"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "run_api_key" {
+  description = "API key required for /run endpoint"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 variable "schedule_expression" {
   description = "EventBridge schedule expression (cron or rate)"

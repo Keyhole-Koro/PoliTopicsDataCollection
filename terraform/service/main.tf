@@ -11,7 +11,8 @@ locals {
   lambda_env_vars = merge(
     var.environment_variables,
     {
-      PROMPT_BUCKET = var.prompt_bucket_name
+      PROMPT_BUCKET    = var.prompt_bucket_name
+      APP_ENVIRONMENT  = var.app_environment
     },
   )
 }
@@ -38,7 +39,13 @@ module "lambda" {
   memory_mb                    = var.lambda_memory_mb
   timeout_sec                  = var.lambda_timeout_sec
   environment_variables        = local.lambda_env_vars
-  secret_environment_variables = var.secret_environment_variables
+  secret_environment_variables = merge(
+    var.secret_environment_variables,
+    {
+      GEMINI_API_KEY = var.gemini_api_key
+      RUN_API_KEY    = var.run_api_key
+    },
+  )
   api_route_key                = var.api_route_key
   prompt_bucket                = module.buckets.prompt_bucket
   error_bucket                 = module.buckets.error_bucket
