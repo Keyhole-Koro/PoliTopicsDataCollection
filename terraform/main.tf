@@ -11,7 +11,6 @@ module "service" {
   source = "./service"
 
   environment                  = var.environment
-  app_environment              = var.app_environment
   service_name                 = var.service_name
   prompt_bucket_name           = var.prompt_bucket_name
   error_bucket_name            = var.error_bucket_name

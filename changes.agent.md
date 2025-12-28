@@ -37,3 +37,18 @@ Topic: Rename 'payload' to 'asset' in relevant contexts
 Details:
 - Reviewed 'PoliTopicsDataCollection' for 'payload' references.
 - Determined that existing 'payload' usages refer to generic data, API responses, or task prompts, not article assets, and thus no changes were required in this submodule.
+
+Agent: Codex
+Date/Time: 2025-12-28 07:26 UTC
+Keywords: config, env, terraform, lambda, gemini, run
+Topic: Require API keys and propagate APP_ENVIRONMENT
+Details:
+- Switched `src/config.ts` to require `GEMINI_API_KEY`, `RUN_API_KEY`, and `APP_ENVIRONMENT` at startup.
+- Terraform now injects `GEMINI_API_KEY` and `RUN_API_KEY` into Lambda secrets and sets `APP_ENVIRONMENT` from the existing `environment` variable.
+- Removed the separate `app_environment` Terraform input.
+- Files changed:
+  - `PoliTopicsDataCollection/src/config.ts`
+  - `PoliTopicsDataCollection/terraform/main.tf`
+  - `PoliTopicsDataCollection/terraform/variables.tf`
+  - `PoliTopicsDataCollection/terraform/service/main.tf`
+  - `PoliTopicsDataCollection/terraform/service/variables.tf`

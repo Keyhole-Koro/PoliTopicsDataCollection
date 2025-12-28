@@ -8,12 +8,6 @@ variable "environment" {
   type        = string
 }
 
-variable "app_environment" {
-  description = "Application environment identifier (local, stage, prod)"
-  type        = string
-  default     = "local"
-}
-
 variable "service_name" {
   description = "Logical name for this service"
   type        = string

@@ -12,7 +12,7 @@ locals {
     var.environment_variables,
     {
       PROMPT_BUCKET    = var.prompt_bucket_name
-      APP_ENVIRONMENT  = var.app_environment
+      APP_ENVIRONMENT  = var.environment
     },
   )
 }
