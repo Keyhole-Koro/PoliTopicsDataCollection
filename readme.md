@@ -4,7 +4,7 @@ PoliTopics-Data-Collection is a serverless data pipeline that downloads Japanese
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22+
 - npm
 - Docker (LocalStack)
 - AWS CLI

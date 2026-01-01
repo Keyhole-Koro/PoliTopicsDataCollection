@@ -1,4 +1,4 @@
-import { parse } from 'valibot';
+import { ValiError, safeParse } from 'valibot';
 
 import { rawMeetingDataSchema, type RawMeetingData } from '@NationalDietAPI/Raw';
 import { readCachedPayload, writeCachedPayload } from './cache';
@@ -69,8 +69,31 @@ function normalizeDateOnly(value: unknown): string | undefined {
 
 export function parseNationalDietResponse(payload: unknown): RawMeetingData {
   const normalizedPayload = normalizePayloadShape(payload);
-  const parsed = parse(rawMeetingDataSchema, normalizedPayload);
+  const parsedResult = safeParse(rawMeetingDataSchema, normalizedPayload);
+  if (!parsedResult.success) {
+    const aggregated = parsedResult.issues.map(formatIssue).join("; ");
+    console.warn("[NationalDietAPI] Payload validation failed", { issues: parsedResult.issues });
+    const error = new ValiError(parsedResult.issues);
+    if (aggregated) {
+      error.message = aggregated;
+    }
+    throw error;
+  }
+  const parsed = parsedResult.output;
   return { ...parsed, meetingRecord: parsed.meetingRecord ?? [] };
+}
+
+type ValidationIssue = {
+  message: string;
+  path?: { key?: string | number }[];
+};
+
+function formatIssue(issue: ValidationIssue): string {
+  const path = issue.path
+    ?.map((item) => (typeof item.key === "number" ? `[${item.key}]` : item.key))
+    .filter((key): key is string => Boolean(key))
+    .join(".");
+  return path ? `${path}: ${issue.message}` : issue.message;
 }
 
 export interface FetchParams {

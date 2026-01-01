@@ -52,3 +52,13 @@ Details:
   - `PoliTopicsDataCollection/terraform/variables.tf`
   - `PoliTopicsDataCollection/terraform/service/main.tf`
   - `PoliTopicsDataCollection/terraform/service/variables.tf`
+
+Agent: Codex
+Date/Time: 2025-12-29 12:08 JST
+Keywords: node, docs, tooling
+Topic: Standardize Node.js 22 requirement
+Details:
+- Updated DataCollection docs to require Node.js 22+.
+- Files changed:
+  - `PoliTopicsDataCollection/readme.md`
+  - `PoliTopicsDataCollection/doc/terraform-localstack.md`

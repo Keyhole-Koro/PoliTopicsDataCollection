@@ -12,7 +12,7 @@ import {
 } from '@utils/packing';
 
 import type { MeetingRecord } from './meetings';
-import type { ChunkItem, IssueTask } from '@DynamoDB/tasks';
+import type { AttachedAssets, ChunkItem, IssueTask } from '@DynamoDB/tasks';
 
 const collectSpeechesByIndex = (speeches: RawSpeechRecord[], indices: number[]): RawSpeechRecord[] => (
   indices
@@ -22,6 +22,75 @@ const collectSpeechesByIndex = (speeches: RawSpeechRecord[], indices: number[]):
 
 const isoDate = (): string => new Date().toISOString().split('T')[0];
 const isoTimestamp = (): string => new Date().toISOString();
+
+type SpeakerAttachment = {
+  order: number;
+  speechId?: string;
+  speaker?: string;
+  speakerYomi?: string | null;
+  speakerGroup?: string | null;
+  speakerPosition?: string | null;
+  originalText?: string;
+};
+
+type AttachedAssetsPayload = {
+  issueID: string;
+  generatedAt: string;
+  runId: string;
+  speeches: SpeakerAttachment[];
+};
+
+function buildSpeakerAttachments(speeches: RawSpeechRecord[]): SpeakerAttachment[] {
+  return speeches
+    .map((speech): SpeakerAttachment | null => {
+      const order = Number(speech.speechOrder);
+      if (!Number.isFinite(order)) return null;
+      const originalText = typeof speech.speech === 'string' ? speech.speech.trim() : '';
+      const speaker = typeof speech.speaker === 'string' ? speech.speaker.trim() : '';
+
+      return {
+        order,
+        speechId: typeof speech.speechID === 'string' ? speech.speechID : undefined,
+        speaker: speaker || undefined,
+        speakerYomi: 'speakerYomi' in speech ? speech.speakerYomi ?? null : undefined,
+        speakerGroup: 'speakerGroup' in speech ? speech.speakerGroup ?? null : undefined,
+        speakerPosition: 'speakerPosition' in speech ? speech.speakerPosition ?? null : undefined,
+        originalText: originalText || undefined,
+      };
+    })
+    .filter((meta): meta is SpeakerAttachment => Boolean(meta));
+}
+
+async function writeAttachedAssets(args: {
+  s3: S3Client;
+  bucket: string;
+  issueID: string;
+  runId: string;
+  speeches: RawSpeechRecord[];
+  createdAt: string;
+}): Promise<AttachedAssets> {
+  const { s3, bucket, issueID, runId, speeches, createdAt } = args;
+  const payload: AttachedAssetsPayload = {
+    issueID,
+    generatedAt: createdAt,
+    runId,
+    speeches: buildSpeakerAttachments(speeches),
+  };
+
+  const key = `attachedAssets/${issueID}.json`;
+  try {
+    await putJsonS3({
+      s3,
+      bucket,
+      key,
+      body: payload,
+    });
+    return { speakerMetadataUrl: `s3://${bucket}/${key}` };
+  } catch (error) {
+    console.error(`[Meeting ${issueID}] Failed to write attached assets to S3`, { error });
+    throw error;
+  }
+}
 
 export async function buildTasksForMeeting(args: {
   meeting: MeetingRecord;
@@ -86,10 +155,19 @@ export async function buildTasksForMeeting(args: {
     session: meeting.session,
   };
 
+  const createdAt = isoTimestamp();
+  const attachedAssets = await writeAttachedAssets({
+    s3,
+    bucket,
+    issueID: meetingIssueID,
+    runId,
+    speeches,
+    createdAt,
+  });
+  const updatedAt = createdAt;
+
   const reducePromptKeyBase = `prompts/reduce/${meetingIssueID}`;
   const singleChunkMode = packs.length === 1 && !packs[0].oversized;
-  const createdAt = isoTimestamp();
-  const updatedAt = createdAt;
 
   if (singleChunkMode) {
     const pack = packs[0];
@@ -124,6 +202,7 @@ export async function buildTasksForMeeting(args: {
       meeting: meetingInfo,
       result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
       chunks: [],
+      attachedAssets,
     };
     return task;
   }
@@ -199,6 +278,7 @@ export async function buildTasksForMeeting(args: {
     meeting: meetingInfo,
     result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
     chunks,
+    attachedAssets,
   };
 
   return task;

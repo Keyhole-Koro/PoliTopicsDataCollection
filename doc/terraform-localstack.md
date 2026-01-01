@@ -5,7 +5,7 @@ Deploy the complete PoliTopics stack into LocalStack with Terraform to exercise 
 ## Prerequisites
 
 - Terraform 1.8.x (matching `.terraform-version`)
-- Node.js 18+ with npm (Lambda bundle + scripts)
+- Node.js 22+ with npm (Lambda bundle + scripts)
 - Docker + LocalStack running via `npm run local:up`
 - AWS CLI v2 (optional, used by the debugging snippets below)
 

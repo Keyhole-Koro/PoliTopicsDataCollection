@@ -112,7 +112,9 @@ if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
   exit 1
 fi
 
+S3_WRITE_POLICY_NAME="${NAME_PREFIX}-s3-writes"
 LAMBDA_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${LAMBDA_POLICY_NAME}"
+S3_WRITE_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${S3_WRITE_POLICY_NAME}"
 BASIC_EXEC_POLICY_ARN="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
 
@@ -170,6 +172,8 @@ run_import "module.service.module.lambda.aws_iam_role.lambda" "$LAMBDA_ROLE_NAME
 run_import "module.service.module.lambda.aws_iam_policy.dynamodb_tasks" "$LAMBDA_POLICY_ARN"
 run_import "module.service.module.lambda.aws_iam_role_policy_attachment.dynamodb_tasks" "${LAMBDA_ROLE_NAME}/${LAMBDA_POLICY_ARN}"
 run_import "module.service.module.lambda.aws_iam_role_policy_attachment.basic_execution" "${LAMBDA_ROLE_NAME}/${BASIC_EXEC_POLICY_ARN}"
+run_import "module.service.module.lambda.aws_iam_policy.s3_write[0]" "$S3_WRITE_POLICY_ARN"
+run_import "module.service.module.lambda.aws_iam_role_policy_attachment.s3_write[0]" "${LAMBDA_ROLE_NAME}/${S3_WRITE_POLICY_ARN}"
 
 run_import "module.service.module.lambda.aws_lambda_function.this" "$LAMBDA_FUNCTION_NAME"
 run_import "module.service.module.lambda.aws_cloudwatch_event_rule.schedule" "$EVENT_RULE_NAME"

@@ -64,7 +64,7 @@ resource "aws_iam_policy" "s3_write" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["s3:PutObject"]
+        Action   = ["s3:PutObject", "s3:GetObject"]
         Resource = local.s3_write_resources
       }
     ]

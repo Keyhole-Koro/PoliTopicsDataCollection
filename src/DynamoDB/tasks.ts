@@ -36,6 +36,10 @@ export type ChunkItem = {
   status: ChunkStatus;
 };
 
+export type AttachedAssets = {
+  speakerMetadataUrl: string;
+};
+
 export type IssueTask = {
   pk: string; // issueID
   status: TaskStatus;
@@ -49,6 +53,7 @@ export type IssueTask = {
   meeting: Meeting;
   result_url: string;
   chunks: ChunkItem[];
+  attachedAssets: AttachedAssets;
 };
 
 function createDocumentClient(): DynamoDBDocumentClient {
