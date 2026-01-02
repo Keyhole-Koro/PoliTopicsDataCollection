@@ -1,7 +1,7 @@
+import { DISCORD_COLORS, type DiscordField, sendNotification } from "@keyhole-koro/politopics-notification";
 import { appConfig } from "../config";
 import type { IssueTask } from "@DynamoDB/tasks";
 import type { RunRange } from "@utils/range";
-import { DISCORD_COLORS, type DiscordField, sendNotification } from "@common/index";
 
 type TaskCreationSummary = {
   range: RunRange;

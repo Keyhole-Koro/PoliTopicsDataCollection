@@ -25,13 +25,10 @@
       "@services/*": ["services/*"],
       "@S3/*": ["S3/*"],
       "@prompts/*": ["prompts/*"],
-      "@utils/*": ["utils/*"],
-      "@common/*": ["../common/src/*"]
+      "@utils/*": ["utils/*"]
     },
   },
-  "include": ["src/**/*", "scripts/**/*.ts", "tests", "../common/src/**/*"],               // Include all TypeScript files in the src folder
-  "references": [
-    { "path": "../common" }
-  ],
+  "include": ["src/**/*", "scripts/**/*.ts", "tests"],               // Include all TypeScript files in the src folder
+  "references": [],
   "exclude": ["node_modules"]            // Exclude node_modules
 }
