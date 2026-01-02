@@ -10,6 +10,8 @@
     "moduleResolution": "node",          // Resolve modules like Node.js does
     "resolveJsonModule": true,           // Allow importing JSON files
     "allowJs": false,                     // Only compile TypeScript files
+    "declaration": true,
+    "composite": true,
 
     "baseUrl": "./src",                    // Base URL for module resolution
     "paths": {         // Optional: For aliasing paths (e.g., "@/components")
@@ -23,9 +25,13 @@
       "@services/*": ["services/*"],
       "@S3/*": ["S3/*"],
       "@prompts/*": ["prompts/*"],
-      "@utils/*": ["utils/*"]
+      "@utils/*": ["utils/*"],
+      "@common/*": ["../common/src/*"]
     },
   },
-  "include": ["src/**/*", "scripts/**/*.ts", "tests"],               // Include all TypeScript files in the src folder
+  "include": ["src/**/*", "scripts/**/*.ts", "tests", "../common/src/**/*"],               // Include all TypeScript files in the src folder
+  "references": [
+    { "path": "../common" }
+  ],
   "exclude": ["node_modules"]            // Exclude node_modules
 }

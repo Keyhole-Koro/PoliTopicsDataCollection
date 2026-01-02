@@ -21,6 +21,9 @@ module "service" {
   secret_environment_variables = var.secret_environment_variables
   gemini_api_key               = var.gemini_api_key
   run_api_key                  = var.run_api_key
+  discord_webhook_error        = var.discord_webhook_error
+  discord_webhook_warn         = var.discord_webhook_warn
+  discord_webhook_batch        = var.discord_webhook_batch
   schedule_expression          = var.schedule_expression
   tags                         = var.tags
   lambda_package_dir           = local.lambda_package_dir

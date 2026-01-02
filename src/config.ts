@@ -22,6 +22,11 @@ export type AppConfig = {
     dir?: string
     bypassOnce?: boolean
   }
+  notifications: {
+    errorWebhook?: string
+    warnWebhook?: string
+    batchWebhook?: string
+  }
 }
 
 const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
@@ -43,6 +48,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     runApiKey: requireEnv("RUN_API_KEY"),
     localRunRange: { from: "2025-09-01", until: "2025-09-30" },
     cache: {},
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
   },
   stage: {
     aws: {
@@ -58,6 +68,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
     runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
   },
   prod: {
     aws: {
@@ -73,6 +88,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
     runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
   },
 }
 
@@ -118,6 +138,12 @@ function requireEnv(name: string): string {
   if (!value || value.trim() === "") {
     throw new Error(`Environment variable ${name} is required`)
   }
+  return value
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]
+  if (!value || value.trim() === "") return undefined
   return value
 }
 

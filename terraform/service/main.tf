@@ -42,8 +42,11 @@ module "lambda" {
   secret_environment_variables = merge(
     var.secret_environment_variables,
     {
-      GEMINI_API_KEY = var.gemini_api_key
-      RUN_API_KEY    = var.run_api_key
+      GEMINI_API_KEY        = var.gemini_api_key
+      RUN_API_KEY           = var.run_api_key
+      DISCORD_WEBHOOK_ERROR = var.discord_webhook_error
+      DISCORD_WEBHOOK_WARN  = var.discord_webhook_warn
+      DISCORD_WEBHOOK_BATCH = var.discord_webhook_batch
     },
   )
   api_route_key                = var.api_route_key

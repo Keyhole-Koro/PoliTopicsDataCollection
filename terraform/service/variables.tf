@@ -44,6 +44,24 @@ variable "run_api_key" {
   default   = ""
 }
 
+variable "discord_webhook_error" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "discord_webhook_warn" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "discord_webhook_batch" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 variable "schedule_expression" {
   type    = string
   default = "cron(0 16 * * ? *)"

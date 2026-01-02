@@ -14,6 +14,11 @@ import { fetchMeetingsForRange } from './lambda/meetings';
 import { resolveRunRange } from './lambda/rangeResolver';
 import { buildTasksForMeeting } from './lambda/taskBuilder';
 import { TaskRepository } from '@DynamoDB/tasks';
+import {
+  notifyRunError,
+  notifyTaskWriteFailure,
+  notifyTasksCreated,
+} from './lambda/notifications';
 
 const PROMPT_BUCKET = appConfig.promptBucket;
 const RUN_ID_PLACEHOLDER = '';
@@ -38,6 +43,12 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
   }
 
   const range = rangeOrResponse;
+  const summary = {
+    meetingsProcessed: 0,
+    createdCount: 0,
+    existingCount: 0,
+    issueIds: [] as string[],
+  };
 
   try {
     const { meetings, recordCount } = await fetchMeetingsForRange(nationalDietApiEndpoint, range);
@@ -47,6 +58,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
       return resJson(200, { message: 'No meetings found for the specified range.' });
     }
 
+    summary.meetingsProcessed = meetings.length;
     const chunkPromptTemplate = chunk_prompt('');
     const reducePromptTemplate = reduce_prompt('');
     const singleChunkPromptTemplate = single_chunk_prompt('');
@@ -55,6 +67,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
 
     if (availableTokens <= 0) {
       console.error('Chunk prompt exceeds available token budget; aborting run.');
+      await notifyRunError('Chunk prompt exceeds available token budget', { range });
       return resJson(500, { error: 'prompt_over_budget' });
     }
 
@@ -71,6 +84,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
       const existingTask = await taskRepo.getTask(meetingIssueID);
       if (existingTask) {
         console.log(`[Meeting ${meetingIssueID}] Task already exists in DynamoDB; skipping creation.`);
+        summary.existingCount += 1;
         continue;
       }
 
@@ -94,18 +108,27 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
 
       try {
         await taskRepo.createTask(issueTask);
+        summary.createdCount += 1;
+        summary.issueIds.push(meetingIssueID);
       } catch (error: any) {
         if (error?.name === 'ConditionalCheckFailedException') {
           console.log(`[Meeting ${meeting.issueID}] Task already exists; skipping creation.`);
+          summary.existingCount += 1;
         } else {
+          await notifyTaskWriteFailure(issueTask, error);
           throw error;
         }
       }
     }
 
+    if (summary.createdCount > 0) {
+      await notifyTasksCreated(summary);
+    }
+
     return resJson(200, { message: 'Event processed.' });
   } catch (error) {
     console.error('Error processing event:', error);
+    await notifyRunError('Unhandled DataCollection error', { range, error });
     return resJson(500, { error: 'internal_error', message: (error as Error).message || error });
   }
 };

@@ -22,6 +22,7 @@ function ensureCleanDist() {
 function main() {
   ensureCleanDist();
   run('npx tsc');
+  run('npx tsc-alias -p tsconfig.json');
   copyFile(path.join(root, 'package.json'), path.join(distDir, 'package.json'));
   if (fs.existsSync(path.join(root, 'package-lock.json'))) {
     copyFile(path.join(root, 'package-lock.json'), path.join(distDir, 'package-lock.json'));
