@@ -64,6 +64,9 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
       result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${issueID}_${idx}.json`,
       status: 'notReady' as const,
     })),
+    attachedAssets: {
+      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${issueID}.json`,
+    },
   };
 };
 
@@ -120,6 +123,13 @@ if (!HAS_LOCALSTACK) {
       process.env = ORIGINAL_ENV;
     });
 
+    /*
+     Contract: verifies chunked tasks can be created, marked ready, and completed in LocalStack DynamoDB; a failure means TaskRepository write/update paths or table schema drifted.
+     Reason: chunked processing is the normal ingestion mode and must preserve StatusIndex/queryability.
+     Accident without this: regressions could silently stop chunk progression, leaving pending tasks that never complete.
+     Odd values: chunkCount=2 exercises multi-chunk transitions instead of trivial single-chunk happy path.
+     Bug history: no known production bug; guardrail for future schema changes.
+    */
     test('creates a chunked task in LocalStack DynamoDB', async () => {
       const issueID = `MOCK-CHUNK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       insertedIssueIds.push(issueID);

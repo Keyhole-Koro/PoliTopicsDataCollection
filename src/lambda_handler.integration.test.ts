@@ -139,6 +139,13 @@ if (!HAS_LOCALSTACK) {
       process.env = ORIGINAL_ENV;
     });
 
+    /*
+     Contract: end-to-end fetch from the real National Diet API should cache the response and persist tasks to LocalStack; failure means ingestion flow or cache wiring regressed.
+     Reason: validates live API shape against our parser and storage pipeline, not just mocks.
+     Accident without this: upstream schema drift could silently break task generation until production alarms.
+     Odd values: fixed date range (2025-09-01..30) keeps fixture deterministic while still hitting real API data.
+     Bug history: none; guardrail for upstream contract changes.
+    */
     test(
       'fetches from the real API, caches the response, and stores DynamoDB tasks',
       async () => {

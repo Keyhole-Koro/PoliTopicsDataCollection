@@ -54,6 +54,13 @@ describe('lambda_handler run endpoint', () => {
     jest.restoreAllMocks();
   });
 
+  /*
+   Contract: guarantees /run rejects when x-api-key is missing/invalid; if it fails, auth guard is bypassed.
+   Reason: API key enforcement is a business rule to prevent unauthorized task creation.
+   Accident without this: deployments could expose the ingestion endpoint publicly and allow arbitrary runs.
+   Odd values: none; empty headers emulate the most common misconfig.
+   Bug history: none known.
+  */
   test('rejects requests without a valid x-api-key header', async () => {
     await jest.isolateModulesAsync(async () => {
       const { applyLambdaTestEnv, DEFAULT_PROMPT_BUCKET } = await import('./testUtils/testEnv');
@@ -67,6 +74,13 @@ describe('lambda_handler run endpoint', () => {
     });
   });
 
+  /*
+   Contract: ensures /run returns 200 and does not enqueue tasks when upstream ND API returns no meetings; failure means handler breaks the empty-range contract.
+   Reason: empty windows should be a harmless no-op; protects against accidental task creation on empty data.
+   Accident without this: handler might throw or create tasks with missing data, polluting DynamoDB.
+   Odd values: mock ND API returns zero meetings to explicitly hit the empty path.
+   Bug history: none recorded.
+  */
   test('processes /run when the API key and dependencies are configured', async () => {
     const fetchMock = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({
       ok: true,

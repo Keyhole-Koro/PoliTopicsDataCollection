@@ -201,6 +201,13 @@ if (!HAS_LOCALSTACK) {
       }
     }
 
+    /*
+     Contract: for small meetings the handler must create a single-chunk task and persist it; failure means single_chunk path broke.
+     Reason: small payloads bypass chunking and should still generate a task and S3 prompt.
+     Accident without this: tiny meetings could be dropped silently, reducing coverage.
+     Odd values: tiny speech set forces single_chunk branch explicitly.
+     Bug history: none recorded.
+    */
     test('processes a small meeting and stores a direct task in LocalStack', async () => {
       const issueID = `MTG-LOCAL-DIRECT-${Date.now()}`;
       const dietResponse: RawMeetingData = {
@@ -290,6 +297,13 @@ if (!HAS_LOCALSTACK) {
       fetchMock.mockRestore();
     }, 60000);
 
+    /*
+     Contract: ensures chunked meetings generate prompts and tasks across S3/DynamoDB; breakage means chunk flow or marshalling regressed.
+     Reason: chunked path is the common case; we mock ND API to hit chunk logic deterministically.
+     Accident without this: marshalling errors could leave S3/DynamoDB inconsistent and stall downstream reducers.
+     Odd values: mock meeting count drives multiple chunks to exercise reduce prompt assembly.
+     Bug history: none.
+    */
     test('processes mocked meetings and persists chunked tasks to LocalStack', async () => {
       const issueID = `MTG-LOCAL-CHUNK-${Date.now()}`;
       const dietResponse: RawMeetingData = {

@@ -41,6 +41,9 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
       result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${args.issueID}_${idx}.json`,
       status: 'notReady' as const,
     })),
+    attachedAssets: {
+      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${args.issueID}.json`,
+    },
   };
 };
 
@@ -84,6 +87,13 @@ if (!HAS_LOCALSTACK) {
       process.env = ORIGINAL_ENV;
     });
 
+    /*
+     Contract: ensures TaskRepository can persist chunked tasks and list them via the StatusIndex; failure means write/query paths or index definitions changed.
+     Reason: chunked tasks are the dominant mode for large meetings; this validates LocalStack wiring and schema expectations.
+     Accident without this: a schema drift could break StatusIndex reads and stall all ingestion without immediate alerts.
+     Odd values: chunkCount=2 forces multi-chunk payloads rather than single-chunk shortcuts.
+     Bug history: none specific; preventive coverage.
+    */
     test('creates tasks with chunk metadata and lists pending items', async () => {
       const issueID = `TEST-ISSUE-${Date.now()}`;
       await repository.createTask(createIssueTask({ issueID, chunkCount: 2 }));
@@ -96,6 +106,13 @@ if (!HAS_LOCALSTACK) {
       expect(stored?.chunks.every((chunk) => chunk.status === 'notReady')).toBe(true);
     }, 20000);
 
+    /*
+     Contract: validates markChunkReady flips a chunk to ready without altering task status; broken means downstream reducers never see chunk completion.
+     Reason: chunk readiness drives reduce prompts; this guards the per-chunk update path.
+     Accident without this: chunks could remain notReady and block reduce steps, silently delaying runs.
+     Odd values: chunkCount=1 hits minimal payload but still exercises status flip logic.
+     Bug history: none known.
+    */
     test('markChunkReady updates chunk status', async () => {
       const issueID = `TEST-CHUNK-${Date.now()}`;
       await repository.createTask(createIssueTask({ issueID, chunkCount: 1 }));
@@ -106,6 +123,13 @@ if (!HAS_LOCALSTACK) {
       expect(updated?.status).toBe('pending');
     }, 20000);
 
+    /*
+     Contract: confirms markTaskSucceeded promotes a pending task to completed; failure signals update expressions or table name wiring broke.
+     Reason: completion status is read by recap pipeline; ensure status mutation still works.
+     Accident without this: tasks may remain pending, causing duplicates or retries in later stages.
+     Odd values: chunkCount=0 covers single-chunk/direct reduce path without chunk iteration.
+     Bug history: none recorded.
+    */
     test('markTaskSucceeded updates status', async () => {
       const issueID = `TEST-SUCCEED-${Date.now()}`;
       await repository.createTask(createIssueTask({ issueID, chunkCount: 0 }));

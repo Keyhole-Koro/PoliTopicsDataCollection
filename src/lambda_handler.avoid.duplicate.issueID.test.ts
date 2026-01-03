@@ -130,6 +130,13 @@ if (!HAS_LOCALSTACK) {
       process.env = ORIGINAL_ENV;
     });
 
+    /*
+     Contract: if a task already exists for an issueID, the handler must short-circuit and avoid writing duplicates; failure means idempotency guard is broken.
+     Reason: operational rule—reruns should not enqueue duplicate work for the same meeting.
+     Accident without this: repeated runs could spam DynamoDB and trigger duplicate processing downstream.
+     Odd values: pre-seeding DynamoDB with an existing pk simulates replay conditions.
+     Bug history: regression test for prior duplicate task writes in LocalStack runs (no tracked ticket).
+    */
     test(
       'skips creation when issueID already exists in LocalStack DynamoDB',
       async () => {

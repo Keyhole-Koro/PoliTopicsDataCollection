@@ -44,6 +44,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
 
   const range = rangeOrResponse;
   const summary = {
+    range,
     meetingsProcessed: 0,
     createdCount: 0,
     existingCount: 0,

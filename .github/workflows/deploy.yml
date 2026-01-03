@@ -16,16 +16,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
-      name: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production' || 'stage' }}
+      name: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod' || 'stage' }}
     permissions:
       contents: read
       id-token: write
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-3' }}
       AWS_ROLE_TO_ASSUME: ${{ startsWith(github.ref, 'refs/heads/prod') && secrets.PROD_ROLE_TO_ASSUME || secrets.STAGE_ROLE_TO_ASSUME }}
-      TF_VARS_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production.tfvars' || 'stage.tfvars' }}
-      TF_BACKEND_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'production.hcl' || 'stage.hcl' }}
-      TF_VAR_secret_environment_variables: ${{ startsWith(github.ref, 'refs/heads/prod') && format('{{"RUN_API_KEY":"{0}","GEMINI_API_KEY":"{1}"}}', secrets.PROD_RUN_API_KEY, secrets.PROD_GEMINI_API_KEY) || format('{{"RUN_API_KEY":"{0}","GEMINI_API_KEY":"{1}"}}', secrets.STAGE_RUN_API_KEY, secrets.STAGE_GEMINI_API_KEY) }}
+      TF_VARS_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod.tfvars' || 'stage.tfvars' }}
+      TF_BACKEND_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod.hcl' || 'stage.hcl' }}
+      TF_VAR_discord_webhook_error: ${{ secrets.DISCORD_WEBHOOK_ERROR }}
+      TF_VAR_discord_webhook_warn: ${{ secrets.DISCORD_WEBHOOK_WARN }}
+      TF_VAR_discord_webhook_batch: ${{ secrets.DISCORD_WEBHOOK_BATCH }}
       NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     steps:
       - name: Checkout
@@ -55,6 +57,17 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           role-session-name: politopics-github-actions
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Export TF_VAR_secret_environment_variables
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
+            RUN_API_KEY="${{ secrets.PROD_RUN_API_KEY }}"
+            GEMINI_API_KEY="${{ secrets.PROD_GEMINI_API_KEY }}"
+          else
+            RUN_API_KEY="${{ secrets.STAGE_RUN_API_KEY }}"
+            GEMINI_API_KEY="${{ secrets.STAGE_GEMINI_API_KEY }}"
+          fi
+          echo "TF_VAR_secret_environment_variables=$(jq -nc --arg run "$RUN_API_KEY" --arg gem "$GEMINI_API_KEY" '{RUN_API_KEY:$run,GEMINI_API_KEY:$gem}')" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}

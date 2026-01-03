@@ -1,4 +1,4 @@
-import { ValiError, safeParse } from 'valibot';
+import { ValiError, safeParse, type BaseIssue } from 'valibot';
 
 import { rawMeetingDataSchema, type RawMeetingData } from '@NationalDietAPI/Raw';
 import { readCachedPayload, writeCachedPayload } from './cache';
@@ -83,14 +83,16 @@ export function parseNationalDietResponse(payload: unknown): RawMeetingData {
   return { ...parsed, meetingRecord: parsed.meetingRecord ?? [] };
 }
 
-type ValidationIssue = {
-  message: string;
-  path?: { key?: string | number }[];
-};
+type ValidationIssue = BaseIssue<unknown>;
 
 function formatIssue(issue: ValidationIssue): string {
   const path = issue.path
-    ?.map((item) => (typeof item.key === "number" ? `[${item.key}]` : item.key))
+    ?.map((item) => {
+      const key = (item as { key?: string | number | symbol }).key;
+      if (typeof key === "number") return `[${key}]`;
+      if (typeof key === "symbol") return key.toString();
+      return key;
+    })
     .filter((key): key is string => Boolean(key))
     .join(".");
   return path ? `${path}: ${issue.message}` : issue.message;
