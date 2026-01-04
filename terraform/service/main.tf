@@ -50,8 +50,8 @@ module "lambda" {
     },
   )
   api_route_key                = var.api_route_key
-  prompt_bucket                = module.buckets.prompt_bucket
-  error_bucket                 = module.buckets.error_bucket
+  prompt_bucket                = var.prompt_bucket_name
+  error_bucket                 = var.error_bucket_name
   task_table_name              = module.tasks_table.table_name
   task_table_arn               = module.tasks_table.table_arn
   schedule_expression          = var.schedule_expression

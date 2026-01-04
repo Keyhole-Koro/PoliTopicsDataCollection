@@ -2,6 +2,36 @@ import { ValiError } from 'valibot';
 
 import { parseNationalDietResponse } from './NationalDietAPI';
 
+/*
+ * parses valid payloads and normalizes array fields
+ * [Contract] parseNationalDietResponse must coerce string/array fields to numbers/arrays and trim timestamps.
+ * [Reason] ND API often returns strings; parser must normalize before storage.
+ * [Accident] Without this, chunk sizing/order would be wrong.
+ * [Odd] speechOrder "5", mixed string counts, and timestamp trimming exercised.
+ * [History] None.
+ *
+ * handles empty responses without meetingRecord data
+ * [Contract] Empty responses must yield empty arrays and null nextRecordPosition without throwing.
+ * [Reason] ND API pages can legitimately be empty.
+ * [Accident] Without this, ingestion would crash on quiet days.
+ * [Odd] meetingRecord omitted entirely.
+ * [History] None.
+ *
+ * throws when payload does not satisfy schema
+ * [Contract] Invalid payloads must raise ValiError (e.g., non-numeric speechOrder).
+ * [Reason] Guards Dynamo from malformed upstream data.
+ * [Accident] Without this, corrupt records could be stored and break reducers.
+ * [Odd] speechOrder set to string "NaN" to violate the contract.
+ * [History] None.
+ *
+ * normalizes timestamp strings to YYYY-MM-DD
+ * [Contract] Parser must strip time to date-only for createTime/updateTime.
+ * [Reason] Consistent date keys are required for indexes/dedup.
+ * [Accident] Without this, date comparisons would skew.
+ * [Odd] Inputs like "2025-11-18 23:04:25" cross day boundaries.
+ * [History] None.
+ */
+
 describe('parseNationalDietResponse', () => {
   test('parses valid payloads and normalizes array fields', () => {
     const mockData = {

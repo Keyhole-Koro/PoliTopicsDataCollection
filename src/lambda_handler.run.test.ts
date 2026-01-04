@@ -12,6 +12,22 @@ jest.doMock('@DynamoDB/tasks', () => ({
   })),
 }));
 
+/*
+ * rejects requests without a valid x-api-key header
+ * [Contract] /run must return 401 and skip task creation when API key is missing/invalid.
+ * [Reason] API key enforcement protects the ingestion endpoint.
+ * [Accident] Without this, anyone could enqueue tasks and flood the pipeline.
+ * [Odd] Empty headers emulate common misconfig.
+ * [History] None.
+ *
+ * processes /run when the API key and dependencies are configured
+ * [Contract] With a valid key and empty ND API result, handler returns 200 and enqueues no tasks.
+ * [Reason] Empty ranges should be a no-op to avoid garbage records.
+ * [Accident] Without this, handler might throw or write placeholder tasks.
+ * [Odd] Mock ND payload has zero meetings; x-api-key set to "secret".
+ * [History] None.
+ */
+
 describe('lambda_handler run endpoint', () => {
   const ORIGINAL_ENV = process.env;
 

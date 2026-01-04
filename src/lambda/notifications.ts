@@ -1,7 +1,14 @@
-import { DISCORD_COLORS, type DiscordField, sendNotification } from "@keyhole-koro/politopics-notification";
+import { DISCORD_COLORS, type DiscordField, sendNotification as _sendNotification } from "@keyhole-koro/politopics-notification";
 import { appConfig } from "../config";
 import type { IssueTask } from "@DynamoDB/tasks";
 import type { RunRange } from "@utils/range";
+
+const enableNotification = process.env.ENABLE_NOTIFICATION !== "false"
+
+const sendNotification = async (...args: Parameters<typeof _sendNotification>) => {
+  if (!enableNotification) return
+  return _sendNotification(...args)
+}
 
 type TaskCreationSummary = {
   range: RunRange;

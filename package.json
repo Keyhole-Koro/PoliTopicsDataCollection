@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "test": "jest",
+    "test": "ENABLE_NOTIFICATION=false jest",
     "build": "node scripts/build-lambda.js",
     "postbuild": "tsc-alias"
   },

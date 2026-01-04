@@ -12,6 +12,15 @@ import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
 
+/*
+ * creates a chunked task in LocalStack DynamoDB
+ * [Contract] TaskRepository must create chunked tasks, mark a chunk ready, and mark the task completed against real Dynamo API.
+ * [Reason] Chunk lifecycle drives reduce orchestration and relies on StatusIndex shape.
+ * [Accident] Without this, chunk progression could stall and block reducers.
+ * [Odd] chunkCount=2 exercises multi-chunk transitions; cleanup optional for manual inspection.
+ * [History] None; schema guardrail.
+ */
+
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 let tableName = appConfig.llmTaskTable;
 const CLEANUP_RECORDS = false;

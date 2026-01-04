@@ -11,6 +11,29 @@ import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
 
+/*
+ * creates tasks with chunk metadata and lists pending items
+ * [Contract] TaskRepository must persist chunked tasks with chunk arrays and return them via StatusIndex queries.
+ * [Reason] Worker polling depends on StatusIndex to find pending work.
+ * [Accident] Without this, workers could miss tasks or see incomplete chunk metadata.
+ * [Odd] chunkCount=2 forces non-trivial chunk arrays.
+ * [History] None; preventive.
+ *
+ * markChunkReady updates chunk status
+ * [Contract] markChunkReady must flip a chunk to ready without changing task status.
+ * [Reason] Reduce scheduling depends on per-chunk readiness.
+ * [Accident] Without this, reduce prompts would never be scheduled.
+ * [Odd] chunkCount=1 minimal payload to hit the path.
+ * [History] None.
+ *
+ * markTaskSucceeded updates status
+ * [Contract] markTaskSucceeded must promote pending tasks to completed.
+ * [Reason] Downstream recap pipeline reads completion to avoid duplicates.
+ * [Accident] Without this, tasks would remain pending and be retried or duplicated.
+ * [Odd] chunkCount=0 covers single_chunk/direct path.
+ * [History] None.
+ */
+
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 
 const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTask => {

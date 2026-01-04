@@ -19,6 +19,15 @@ import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
 
+/*
+ * skips creation when issueID already exists in LocalStack DynamoDB
+ * [Contract] Handler must short-circuit and avoid writing duplicates if a task with the same issueID already exists.
+ * [Reason] Idempotency is required for reruns/replays to prevent duplicate work.
+ * [Accident] Without this, repeated runs would enqueue duplicates and double processing.
+ * [Odd] Pre-seeds Dynamo with a pending pk `MTG-DUP-...` and reruns handler with mocked ND API.
+ * [History] Regression cover for prior duplicate-task behavior in LocalStack runs (no ticket).
+ */
+
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
   Array.from({ length: count }, (_, idx) => ({
     speechID: `sp-${idx + 1}`,

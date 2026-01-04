@@ -16,6 +16,15 @@ import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig, updateAppConfig } from './config';
 
+/*
+ * fetches from the real API, caches the response, and stores DynamoDB tasks
+ * [Contract] Lambda must call the live ND API, cache responses, and write prompt URLs/chunk metadata to LocalStack DynamoDB.
+ * [Reason] Validates real upstream contract beyond mocks and ensures cache wiring works.
+ * [Accident] Without this, ND API schema drift could silently break ingestion.
+ * [Odd] Fixed date range 2025-09-01..30 and runTimestamp filter isolate new tasks; depends on LocalStack + cache dir.
+ * [History] None; forward-looking safeguard.
+ */
+
 const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
 
 if (!HAS_LOCALSTACK) {

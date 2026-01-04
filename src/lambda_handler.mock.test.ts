@@ -26,6 +26,22 @@ import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
 
+/*
+ * processes a small meeting and stores a direct task in LocalStack
+ * [Contract] Small meetings must create a single_chunk task with prompt and Dynamo entry and return 200.
+ * [Reason] Tiny payloads bypass chunking but still need tasks persisted.
+ * [Accident] Without this, small meetings could be dropped silently and never summarized.
+ * [Odd] Two speeches with GEMINI_MAX_INPUT_TOKEN=120 forces single_chunk; pre-clears existing pk.
+ * [History] None recorded; guardrail.
+ *
+ * processes mocked meetings and persists chunked tasks to LocalStack
+ * [Contract] Larger mocked meetings must trigger chunking and persist chunked tasks/prompts in LocalStack.
+ * [Reason] Chunk flow is the dominant path; ensures chunk marshalling works.
+ * [Accident] Without this, chunk creation could break and leave empty tasks.
+ * [Odd] Six speeches with GEMINI_MAX_INPUT_TOKEN=35 forces chunking; expects chunk statuses notReady/ready.
+ * [History] None; preventive.
+ */
+
 const buildSpeeches = (count: number): RawSpeechRecord[] => (
   Array.from({ length: count }, (_, idx) => ({
     speechID: `sp-${idx + 1}`,
