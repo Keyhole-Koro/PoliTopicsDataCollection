@@ -5,6 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const distDir = path.join(root, 'dist');
+const tsBuildInfoPath = path.join(root, 'tsconfig.tsbuildinfo');
 
 function run(cmd, cwd = root) {
   execSync(cmd, { cwd, stdio: 'inherit' });
@@ -17,6 +18,7 @@ function copyFile(src, dest) {
 function ensureCleanDist() {
   fs.rmSync(distDir, { recursive: true, force: true });
   fs.mkdirSync(distDir, { recursive: true });
+  fs.rmSync(tsBuildInfoPath, { force: true }); // force a fresh incremental build
 }
 
 function main() {
