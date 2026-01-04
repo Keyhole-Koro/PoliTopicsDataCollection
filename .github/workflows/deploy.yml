@@ -1,10 +1,14 @@
 name: Deploy Lambda
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Build and Validate (DataCollection)
     branches:
       - stage
       - prod
+    types:
+      - completed
   workflow_dispatch:
 
 env:
@@ -12,26 +16,50 @@ env:
   TERRAFORM_VERSION: "1.9.5"
   TERRAFORM_WORKING_DIR: terraform
 
+defaults:
+  run:
+    working-directory: ./PoliTopicsDataCollection
+
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment:
-      name: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod' || 'stage' }}
+      name: ${{ startsWith(github.event.workflow_run.head_branch || github.ref_name, 'prod') && 'prod' || 'stage' }}
     permissions:
       contents: read
       id-token: write
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-3' }}
-      AWS_ROLE_TO_ASSUME: ${{ startsWith(github.ref, 'refs/heads/prod') && secrets.PROD_ROLE_TO_ASSUME || secrets.STAGE_ROLE_TO_ASSUME }}
-      TF_VARS_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod.tfvars' || 'stage.tfvars' }}
-      TF_BACKEND_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod.hcl' || 'stage.hcl' }}
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
       TF_VAR_discord_webhook_error: ${{ secrets.DISCORD_WEBHOOK_ERROR }}
       TF_VAR_discord_webhook_warn: ${{ secrets.DISCORD_WEBHOOK_WARN }}
       TF_VAR_discord_webhook_batch: ${{ secrets.DISCORD_WEBHOOK_BATCH }}
-      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+      TF_VAR_gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+      TF_VAR_run_api_key: ${{ secrets.RUN_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Determine deployment variables
+        id: vars
+        run: |
+          branch="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "$branch" == prod* ]]; then
+            env_name="prod"
+            tf_vars_file="prod.tfvars"
+            tf_backend_file="prod.hcl"
+          else
+            env_name="stage"
+            tf_vars_file="stage.tfvars"
+            tf_backend_file="stage.hcl"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "env=$env_name" >> "$GITHUB_OUTPUT"
+          echo "tf_vars_file=$tf_vars_file" >> "$GITHUB_OUTPUT"
+          echo "tf_backend_file=$tf_backend_file" >> "$GITHUB_OUTPUT"
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -54,24 +82,13 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ steps.vars.outputs.env == 'prod' && secrets.PROD_ROLE_TO_ASSUME || secrets.STAGE_ROLE_TO_ASSUME }}
           role-session-name: politopics-github-actions
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Export TF_VAR_secret_environment_variables
-        run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/prod" ]]; then
-            RUN_API_KEY="${{ secrets.PROD_RUN_API_KEY }}"
-            GEMINI_API_KEY="${{ secrets.PROD_GEMINI_API_KEY }}"
-          else
-            RUN_API_KEY="${{ secrets.STAGE_RUN_API_KEY }}"
-            GEMINI_API_KEY="${{ secrets.STAGE_GEMINI_API_KEY }}"
-          fi
-          echo "TF_VAR_secret_environment_variables=$(jq -nc --arg run "$RUN_API_KEY" --arg gem "$GEMINI_API_KEY" '{RUN_API_KEY:$run,GEMINI_API_KEY:$gem}')" >> "$GITHUB_ENV"
-
       - name: Terraform Init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform init -backend-config="backends/${TF_BACKEND_FILE}"
+        run: terraform init -backend-config="backends/${{ steps.vars.outputs.tf_backend_file }}"
 
       - name: Terraform Format Check
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
@@ -79,7 +96,7 @@ jobs:
 
       - name: Terraform Plan
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform plan -var-file="tfvars/${TF_VARS_FILE}" -out=tfplan
+        run: terraform plan -var-file="tfvars/${{ steps.vars.outputs.tf_vars_file }}" -out=tfplan
 
       - name: Terraform Apply
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
