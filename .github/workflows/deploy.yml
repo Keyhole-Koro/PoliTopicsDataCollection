@@ -35,8 +35,6 @@ jobs:
       TF_VAR_discord_webhook_error: ${{ secrets.DISCORD_WEBHOOK_ERROR }}
       TF_VAR_discord_webhook_warn: ${{ secrets.DISCORD_WEBHOOK_WARN }}
       TF_VAR_discord_webhook_batch: ${{ secrets.DISCORD_WEBHOOK_BATCH }}
-      TF_VAR_gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-      TF_VAR_run_api_key: ${{ secrets.RUN_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,6 +58,22 @@ jobs:
           echo "env=$env_name" >> "$GITHUB_OUTPUT"
           echo "tf_vars_file=$tf_vars_file" >> "$GITHUB_OUTPUT"
           echo "tf_backend_file=$tf_backend_file" >> "$GITHUB_OUTPUT"
+
+      - name: Export TF_VAR_gemini_api_key and TF_VAR_run_api_key
+        env:
+          DEPLOY_ENV: ${{ steps.vars.outputs.env }}
+          PROD_GEMINI_API_KEY: ${{ secrets.PROD_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
+          STAGE_GEMINI_API_KEY: ${{ secrets.STAGE_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
+          PROD_RUN_API_KEY: ${{ secrets.PROD_RUN_API_KEY || secrets.RUN_API_KEY }}
+          STAGE_RUN_API_KEY: ${{ secrets.STAGE_RUN_API_KEY || secrets.RUN_API_KEY }}
+        run: |
+          if [[ "$DEPLOY_ENV" == "prod" ]]; then
+            echo "TF_VAR_gemini_api_key=$PROD_GEMINI_API_KEY" >> "$GITHUB_ENV"
+            echo "TF_VAR_run_api_key=$PROD_RUN_API_KEY" >> "$GITHUB_ENV"
+          else
+            echo "TF_VAR_gemini_api_key=$STAGE_GEMINI_API_KEY" >> "$GITHUB_ENV"
+            echo "TF_VAR_run_api_key=$STAGE_RUN_API_KEY" >> "$GITHUB_ENV"
+          fi
 
       - name: Use Node.js
         uses: actions/setup-node@v4
