@@ -42,6 +42,9 @@ export function resolveRunRange(
       return { from: range.from, until: range.until };
     }
     default:
-      return resJson(400, { error: 'invalid_range', message: 'Could not determine run range.' });
+      console.warn('[rangeResolver] Unrecognized event source; defaulting to cron range', {
+        source: (event as ScheduledEvent).source,
+      });
+      return defaultCronRange();
   }
 }
