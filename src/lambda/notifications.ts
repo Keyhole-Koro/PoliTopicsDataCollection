@@ -19,7 +19,7 @@ type TaskCreationSummary = {
 };
 
 function baseFields(range?: RunRange): DiscordField[] {
-  const fields: DiscordField[] = [{ name: "Environment", value: appConfig.environment, inline: true }];
+  const fields: DiscordField[] = [];
   if (range) {
     fields.push({ name: "Range", value: `${range.from} → ${range.until}`, inline: true });
   }
