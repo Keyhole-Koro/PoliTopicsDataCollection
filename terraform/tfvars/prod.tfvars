@@ -1,6 +1,7 @@
 aws_region          = "ap-northeast-3"
 environment         = "production"
 service_name        = "politopics"
+lambda_function_name = "poliopics-datacollection-prod"
 prompt_bucket_name  = "politopics-data-collection-prompts-prod"
 error_bucket_name   = "politopics-data-collection-errors-prod"
 llm_task_table_name = "politopics-llm-tasks-prod"

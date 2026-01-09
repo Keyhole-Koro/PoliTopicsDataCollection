@@ -13,6 +13,12 @@ variable "service_name" {
   type        = string
 }
 
+variable "lambda_function_name" {
+  description = "Override for the Lambda function name (defaults to <service>-<env>-data-collection-fn)"
+  type        = string
+  default     = null
+}
+
 variable "prompt_bucket_name" {
   description = "S3 bucket for prompt payloads"
   type        = string

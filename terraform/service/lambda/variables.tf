@@ -2,6 +2,11 @@ variable "name_prefix" {
   type = string
 }
 
+variable "function_name_override" {
+  type    = string
+  default = null
+}
+
 variable "memory_mb" {
   type = number
 }

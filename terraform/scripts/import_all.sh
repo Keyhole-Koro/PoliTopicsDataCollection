@@ -13,7 +13,7 @@ case "$ENVIRONMENT_ARG" in
     VAR_FILE="$TFVARS_DIR/stage.tfvars"
     ;;
   prod)
-    VAR_FILE="$TFVARS_DIR/production.tfvars"
+    VAR_FILE="$TFVARS_DIR/prod.tfvars"
     ;;
   *)
     if [[ -f "$ENVIRONMENT_ARG" ]]; then
@@ -77,6 +77,7 @@ values = {
   "ENABLE_HTTP_API": extract("enable_http_api") or "true",
   "API_ROUTE_KEY": extract("api_route_key") or "POST /run",
   "AWS_REGION": extract("aws_region"),
+  "LAMBDA_FUNCTION_NAME": extract("lambda_function_name"),
 }
 
 for key, value in values.items():
@@ -96,9 +97,11 @@ done
 
 TF_CMD=(terraform -chdir="$TF_DIR")
 NAME_PREFIX="${SERVICE_NAME}-${ENVIRONMENT}"
+if [[ -z "${LAMBDA_FUNCTION_NAME:-}" ]]; then
+  LAMBDA_FUNCTION_NAME="${NAME_PREFIX}-data-collection-fn"
+fi
 LAMBDA_ROLE_NAME="${NAME_PREFIX}-data-collection-lambda-role"
 LAMBDA_POLICY_NAME="${NAME_PREFIX}-dynamodb-tasks"
-LAMBDA_FUNCTION_NAME="${NAME_PREFIX}-data-collection-fn"
 EVENT_RULE_NAME="${NAME_PREFIX}-data-collection-schedule"
 EVENT_TARGET_ID="${NAME_PREFIX}-lambda"
 HTTP_API_NAME="${NAME_PREFIX}-http"

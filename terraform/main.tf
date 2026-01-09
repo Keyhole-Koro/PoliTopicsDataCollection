@@ -30,4 +30,5 @@ module "service" {
   lambda_package_output_path   = local.lambda_package_output_path
   api_route_key                = var.api_route_key
   enable_http_api              = var.enable_http_api
+  lambda_function_name         = var.lambda_function_name
 }

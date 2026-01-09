@@ -96,6 +96,11 @@ locals {
   package_output_zip      = local.package_output_override != "" ? local.package_output_override : "${path.module}/.build/${var.name_prefix}.zip"
 }
 
+locals {
+  function_name_override = trimspace(coalesce(var.function_name_override, ""))
+  function_name          = local.function_name_override != "" ? local.function_name_override : "${var.name_prefix}-data-collection-fn"
+}
+
 data "archive_file" "lambda" {
   type        = "zip"
   source_dir  = local.package_source_dir
@@ -103,7 +108,7 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_lambda_function" "this" {
-  function_name    = "${var.name_prefix}-data-collection-fn"
+  function_name    = local.function_name
   role             = aws_iam_role.lambda.arn
   handler          = "lambda_handler.handler"
   runtime          = "nodejs22.x"

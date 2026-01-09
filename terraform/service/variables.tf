@@ -6,6 +6,11 @@ variable "service_name" {
   type = string
 }
 
+variable "lambda_function_name" {
+  type    = string
+  default = null
+}
+
 variable "prompt_bucket_name" {
   type = string
 }

@@ -36,6 +36,7 @@ module "lambda" {
   source = "./lambda"
 
   name_prefix                  = local.name_prefix
+  function_name_override       = var.lambda_function_name
   memory_mb                    = var.lambda_memory_mb
   timeout_sec                  = var.lambda_timeout_sec
   environment_variables        = local.lambda_env_vars
