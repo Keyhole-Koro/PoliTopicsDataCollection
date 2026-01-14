@@ -9,7 +9,7 @@ import { DeleteCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
-import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
+import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LOCALSTACK_URL } from '../testUtils/testEnv';
 import { appConfig } from '../config';
 
 /*
@@ -21,7 +21,7 @@ import { appConfig } from '../config';
  * [History] None; schema guardrail.
  */
 
-const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
+const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 let tableName = appConfig.llmTaskTable;
 const CLEANUP_RECORDS = false;
 
@@ -79,85 +79,76 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
   };
 };
 
-if (!HAS_LOCALSTACK) {
-  // eslint-disable-next-line jest/no-focused-tests
-  describe.skip('TaskRepository chunked LocalStack test', () => {
-    it('skipped because LOCALSTACK_URL is not set', () => {
-      expect(true).toBe(true);
+describe('TaskRepository chunked LocalStack test', () => {
+  const ORIGINAL_ENV = process.env;
+  let dynamo: DynamoDBClient;
+  let docClient: DynamoDBDocumentClient;
+  let repository: TaskRepository;
+  const insertedIssueIds: string[] = [];
+  let awsRegion: string;
+
+  beforeAll(async () => {
+    process.env = { ...ORIGINAL_ENV };
+    applyLocalstackEnv();
+    tableName = appConfig.llmTaskTable;
+    awsRegion = appConfig.aws.region;
+    const credentials = appConfig.aws.credentials ?? {
+      accessKeyId: 'test',
+      secretAccessKey: 'test',
+    };
+    dynamo = new DynamoDBClient({
+      region: awsRegion,
+      endpoint: LOCALSTACK_ENDPOINT || DEFAULT_LOCALSTACK_URL,
+      credentials,
     });
-  });
-} else {
-  describe('TaskRepository chunked LocalStack test', () => {
-    const ORIGINAL_ENV = process.env;
-    let dynamo: DynamoDBClient;
-    let docClient: DynamoDBDocumentClient;
-    let repository: TaskRepository;
-    const insertedIssueIds: string[] = [];
-    let awsRegion: string;
+    docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
 
-    beforeAll(async () => {
-      process.env = { ...ORIGINAL_ENV };
-      applyLocalstackEnv();
-      tableName = appConfig.llmTaskTable;
-      awsRegion = appConfig.aws.region;
-      const credentials = appConfig.aws.credentials ?? {
-        accessKeyId: 'test',
-        secretAccessKey: 'test',
-      };
-      dynamo = new DynamoDBClient({
-        region: awsRegion,
-        endpoint: LOCALSTACK_ENDPOINT,
-        credentials,
-      });
-      docClient = DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } });
+    repository = new TaskRepository({ tableName, client: docClient });
+    console.log(`[LocalStack Chunk Test] Using DynamoDB table ${tableName}`);
+  }, 40000);
 
-      repository = new TaskRepository({ tableName, client: docClient });
-      console.log(`[LocalStack Chunk Test] Using DynamoDB table ${tableName}`);
-    }, 40000);
-
-    afterAll(async () => {
-      if (CLEANUP_RECORDS && insertedIssueIds.length) {
-        for (const pk of insertedIssueIds) {
-          try {
-            await docClient.send(new DeleteCommand({ TableName: tableName, Key: { pk } }));
-          } catch (error) {
-            console.warn(`[LocalStack Chunk Test] Failed to delete ${pk}:`, error);
-          }
+  afterAll(async () => {
+    if (CLEANUP_RECORDS && insertedIssueIds.length) {
+      for (const pk of insertedIssueIds) {
+        try {
+          await docClient.send(new DeleteCommand({ TableName: tableName, Key: { pk } }));
+        } catch (error) {
+          console.warn(`[LocalStack Chunk Test] Failed to delete ${pk}:`, error);
         }
-      } else if (insertedIssueIds.length) {
-        console.log('[LocalStack Chunk Test] Left inserted tasks for inspection:', insertedIssueIds);
       }
+    } else if (insertedIssueIds.length) {
+      console.log('[LocalStack Chunk Test] Left inserted tasks for inspection:', insertedIssueIds);
+    }
 
-      await dynamo.destroy();
-      process.env = ORIGINAL_ENV;
-    });
-
-    /*
-     Contract: verifies chunked tasks can be created, marked ready, and completed in LocalStack DynamoDB; a failure means TaskRepository write/update paths or table schema drifted.
-     Reason: chunked processing is the normal ingestion mode and must preserve StatusIndex/queryability.
-     Accident without this: regressions could silently stop chunk progression, leaving pending tasks that never complete.
-     Odd values: chunkCount=2 exercises multi-chunk transitions instead of trivial single-chunk happy path.
-     Bug history: no known production bug; guardrail for future schema changes.
-    */
-    test('creates a chunked task in LocalStack DynamoDB', async () => {
-      const issueID = `MOCK-CHUNK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      insertedIssueIds.push(issueID);
-      const chunkCount = 2;
-
-      await repository.createTask(createChunkedTask(issueID, chunkCount));
-
-      const stored = await repository.getTask(issueID);
-      expect(stored?.pk).toBe(issueID);
-      expect(stored?.chunks).toHaveLength(chunkCount);
-      expect(stored?.chunks.every((chunk) => chunk.status === 'notReady')).toBe(true);
-
-      const chunkReady = await repository.markChunkReady(issueID, 'CHUNK#0');
-      expect(chunkReady?.chunks[0].status).toBe('ready');
-
-      const succeeded = await repository.markTaskSucceeded(issueID);
-      expect(succeeded?.status).toBe('completed');
-
-      console.log(`[LocalStack Chunk Test] Inserted task ${issueID} with ${chunkCount} chunks into ${tableName}.`);
-    }, 30000);
+    await dynamo.destroy();
+    process.env = ORIGINAL_ENV;
   });
-}
+
+  /*
+   Contract: verifies chunked tasks can be created, marked ready, and completed in LocalStack DynamoDB; a failure means TaskRepository write/update paths or table schema drifted.
+   Reason: chunked processing is the normal ingestion mode and must preserve StatusIndex/queryability.
+   Accident without this: regressions could silently stop chunk progression, leaving pending tasks that never complete.
+   Odd values: chunkCount=2 exercises multi-chunk transitions instead of trivial single-chunk happy path.
+   Bug history: no known production bug; guardrail for future schema changes.
+  */
+  test('creates a chunked task in LocalStack DynamoDB', async () => {
+    const issueID = `MOCK-CHUNK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    insertedIssueIds.push(issueID);
+    const chunkCount = 2;
+
+    await repository.createTask(createChunkedTask(issueID, chunkCount));
+
+    const stored = await repository.getTask(issueID);
+    expect(stored?.pk).toBe(issueID);
+    expect(stored?.chunks).toHaveLength(chunkCount);
+    expect(stored?.chunks.every((chunk) => chunk.status === 'notReady')).toBe(true);
+
+    const chunkReady = await repository.markChunkReady(issueID, 'CHUNK#0');
+    expect(chunkReady?.chunks[0].status).toBe('ready');
+
+    const succeeded = await repository.markTaskSucceeded(issueID);
+    expect(succeeded?.status).toBe('completed');
+
+    console.log(`[LocalStack Chunk Test] Inserted task ${issueID} with ${chunkCount} chunks into ${tableName}.`);
+  }, 30000);
+});

@@ -34,7 +34,7 @@ import { appConfig } from '../config';
  * [History] None.
  */
 
-const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
+const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 
 const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTask => {
   const createdAt = new Date().toISOString();
@@ -70,15 +70,7 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
   };
 };
 
-if (!HAS_LOCALSTACK) {
-  // eslint-disable-next-line jest/no-focused-tests
-  describe.skip('TaskRepository LocalStack integration', () => {
-    it('skipped because LOCALSTACK_URL is not set', () => {
-      expect(true).toBe(true);
-    });
-  });
-} else {
-  describe('TaskRepository LocalStack integration', () => {
+describe('TaskRepository LocalStack integration', () => {
     const ORIGINAL_ENV = process.env;
     let tableName: string;
     let client: DynamoDBClient;
@@ -161,4 +153,3 @@ if (!HAS_LOCALSTACK) {
       expect(result?.status).toBe('completed');
     }, 20000);
   });
-}

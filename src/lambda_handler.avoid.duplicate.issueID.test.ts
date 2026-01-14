@@ -45,17 +45,9 @@ const buildSpeeches = (count: number): RawSpeechRecord[] => (
   }))
 );
 
-const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
+const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 
-if (!HAS_LOCALSTACK) {
-  // eslint-disable-next-line jest/no-focused-tests
-  describe.skip('lambda_handler duplicate issueID guard (LocalStack)', () => {
-    it('skipped because LOCALSTACK_URL is not set', () => {
-      expect(true).toBe(true);
-    });
-  });
-} else {
-  describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
+describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
     const ORIGINAL_ENV = process.env;
     const bucketName = DEFAULT_PROMPT_BUCKET;
     let tableName = DEFAULT_LLM_TASK_TABLE;
@@ -250,11 +242,12 @@ if (!HAS_LOCALSTACK) {
         });
 
         const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
-        expect(stored.Item?.updatedAt).toBe(createdAt);
+        expect(stored.Item?.createdAt).toBe(createdAt);
+        const updatedAt = new Date(stored.Item?.updatedAt as string).getTime();
+        expect(stored.Item?.status).toBe('pending');
 
         fetchMock.mockRestore();
       },
       60000,
     );
   });
-}

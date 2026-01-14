@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "test": "ENABLE_NOTIFICATION=false jest",
+    "pretest": "bash scripts/ensure-localstack.sh",
+    "test": "APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false jest",
+    "test:gha": "APP_ENVIRONMENT=ghaTest ENABLE_NOTIFICATION=false jest",
+    "ensure:localstack": "bash scripts/ensure-localstack.sh",
     "build": "node scripts/build-lambda.js",
     "postbuild": "tsc-alias"
   },

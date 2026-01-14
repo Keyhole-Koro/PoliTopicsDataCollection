@@ -96,14 +96,16 @@ export function resetTestConfig(): void {
 }
 
 export function applyLambdaTestEnv(overrides: EnvMap = {}): void {
-  setAppEnvironment("local")
+  process.env.APP_ENVIRONMENT = "localstackTest"
+  setAppEnvironment("localstackTest")
   applyOverrides({ ...LAMBDA_ENV_DEFAULTS, ...overrides })
 }
 
 export function applyLocalstackEnv(overrides: EnvMap = {}): void {
   const { endpoint } = getLocalstackConfig()
   const currentRunKey = appConfig.runApiKey
-  setAppEnvironment("local")
+  process.env.APP_ENVIRONMENT = "localstackTest"
+  setAppEnvironment("localstackTest")
   if (currentRunKey) {
     updateAppConfig({ runApiKey: currentRunKey })
   }
@@ -119,6 +121,6 @@ export function getLocalstackConfig(): { endpoint: string; configured: boolean }
   const endpoint = appConfig.aws.endpoint || DEFAULT_LOCALSTACK_URL
   return {
     endpoint,
-    configured: Boolean(appConfig.aws.endpoint),
+    configured: true,
   }
 }

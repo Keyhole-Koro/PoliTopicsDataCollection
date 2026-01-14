@@ -19,24 +19,31 @@ require_cmd() {
 }
 
 require_cmd terraform
-require_cmd pnpm
+require_cmd npm
 require_cmd aws
 
 echo "==> DataCollection: build"
-(cd "$MODULE_DIR" && pnpm install && pnpm run build)
+(cd "$MODULE_DIR" && npm ci && npm run build)
 
 echo "==> DataCollection: create state bucket"
 "$STATE_SCRIPT" "$ENVIRONMENT"
 
+BACKEND_CONFIG="backends/local.hcl"
+TFVARS_FILE="tfvars/localstack.tfvars"
+if [ "$ENVIRONMENT" == "ghaTest" ]; then
+  BACKEND_CONFIG="backends/ghaTest.hcl"
+  TFVARS_FILE="tfvars/ghaTest.tfvars"
+fi
+
 echo "==> DataCollection: terraform init"
-terraform -chdir="$TF_DIR" init -input=false -reconfigure -backend-config="backends/local.hcl"
+terraform -chdir="$TF_DIR" init -input=false -reconfigure -backend-config="$BACKEND_CONFIG"
 
 echo "==> DataCollection: terraform import"
 "$IMPORT_SCRIPT" "$ENVIRONMENT"
 
 echo "==> DataCollection: terraform plan"
 set +e
-terraform -chdir="$TF_DIR" plan -detailed-exitcode -var-file="tfvars/localstack.tfvars" -out=tfplan
+terraform -chdir="$TF_DIR" plan -detailed-exitcode -var-file="$TFVARS_FILE" -out=tfplan
 PLAN_EXIT_CODE=$?
 set -e
 

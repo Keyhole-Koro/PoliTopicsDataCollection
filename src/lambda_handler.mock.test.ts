@@ -59,17 +59,9 @@ const buildSpeeches = (count: number): RawSpeechRecord[] => (
   }))
 );
 
-const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
+const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 
-if (!HAS_LOCALSTACK) {
-  // eslint-disable-next-line jest/no-focused-tests
-  describe.skip('lambda_handler mocked ND API with LocalStack S3/DynamoDB', () => {
-    it('skipped because LOCALSTACK_URL is not set', () => {
-      expect(true).toBe(true);
-    });
-  });
-} else {
-  describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
+describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
     let bucketName = DEFAULT_PROMPT_BUCKET;
     let tableName = DEFAULT_LLM_TASK_TABLE;
@@ -411,4 +403,3 @@ if (!HAS_LOCALSTACK) {
       fetchMock.mockRestore();
     }, 60000);
   });
-}

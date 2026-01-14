@@ -9,6 +9,9 @@ case "$ENVIRONMENT_ARG" in
   local)
     VAR_FILE="$TFVARS_DIR/localstack.tfvars"
     ;;
+  ghaTest)
+    VAR_FILE="$TFVARS_DIR/ghaTest.tfvars"
+    ;;
   stage)
     VAR_FILE="$TFVARS_DIR/stage.tfvars"
     ;;
@@ -19,7 +22,7 @@ case "$ENVIRONMENT_ARG" in
     if [[ -f "$ENVIRONMENT_ARG" ]]; then
       VAR_FILE="$ENVIRONMENT_ARG"
     else
-      echo "Usage: $(basename "$0") [local|stage|prod]" >&2
+      echo "Usage: $(basename "$0") [local|ghaTest|stage|prod]" >&2
       exit 1
     fi
     ;;

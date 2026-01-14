@@ -25,17 +25,9 @@ import { appConfig, updateAppConfig } from './config';
  * [History] None; forward-looking safeguard.
  */
 
-const { endpoint: LOCALSTACK_ENDPOINT, configured: HAS_LOCALSTACK } = getLocalstackConfig();
+const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 
-if (!HAS_LOCALSTACK) {
-  // eslint-disable-next-line jest/no-focused-tests
-  describe.skip('lambda_handler integration using LocalStack', () => {
-    it('skipped because LOCALSTACK_URL is not set', () => {
-      expect(true).toBe(true);
-    });
-  });
-} else {
-  describe('lambda_handler integration using the real National Diet API with LocalStack S3/DynamoDB', () => {
+describe('lambda_handler integration using the real National Diet API with LocalStack S3/DynamoDB', () => {
     const ORIGINAL_ENV = process.env;
     const bucketName = DEFAULT_PROMPT_BUCKET;
     let tableName = DEFAULT_LLM_TASK_TABLE;
@@ -265,4 +257,3 @@ if (!HAS_LOCALSTACK) {
       60000,
     );
   });
-}

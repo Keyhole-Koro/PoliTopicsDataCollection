@@ -32,3 +32,5 @@ localstack-artifacts
 .build
 
 *.tmp
+
+.secrets

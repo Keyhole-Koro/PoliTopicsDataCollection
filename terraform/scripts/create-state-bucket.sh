@@ -2,19 +2,20 @@
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <local|stage|prod>"
+  echo "Usage: $0 <local|ghaTest|stage|prod>"
   exit 1
 fi
 
 ENVIRONMENT="$1"
 REGION="ap-northeast-3"
-LOCALSTACK_ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localstack:4566}"
+LOCALSTACK_URL="${LOCALSTACK_URL:-${LOCALSTACK_ENDPOINT:-http://localstack:4566}}"
 AWS_ARGS=()
+export AWS_PAGER=""
 
 case "$ENVIRONMENT" in
-  local)
+  local|ghaTest)
     BUCKET="politopics-data-collection-local-state"
-    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_ENDPOINT")
+    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_URL")
     ;;
   stage)
     BUCKET="politopics-data-collection-stage-state"
@@ -24,7 +25,7 @@ case "$ENVIRONMENT" in
     ;;
   *)
     echo "Unknown environment: $ENVIRONMENT"
-    echo "Usage: $0 <local|stage|prod>"
+    echo "Usage: $0 <local|ghaTest|stage|prod>"
     exit 1
     ;;
 esac
@@ -32,8 +33,8 @@ esac
 echo "Environment : $ENVIRONMENT"
 echo "Bucket      : $BUCKET"
 echo "Region      : $REGION"
-if [ "$ENVIRONMENT" = "local" ]; then
-  echo "Endpoint    : $LOCALSTACK_ENDPOINT"
+if [ "$ENVIRONMENT" = "local" ] || [ "$ENVIRONMENT" = "ghaTest" ]; then
+  echo "Endpoint    : $LOCALSTACK_URL"
 fi
 echo
 
