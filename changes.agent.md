@@ -62,3 +62,26 @@ Details:
 - Files changed:
   - `PoliTopicsDataCollection/readme.md`
   - `PoliTopicsDataCollection/doc/terraform-localstack.md`
+
+Agent: Gemini
+Date/Time: 2026-01-15 JST
+Keywords: cron, date-range, bugfix
+Topic: Update default cron range to cover 21 days ago until today
+Details:
+- Changed `defaultCronRange` in `utils/range.ts` to set `until` to today (offset 0) instead of 21 days ago.
+- Added unit test to verify the fix.
+- Files changed:
+  - `PoliTopicsDataCollection/src/utils/range.ts`
+  - `PoliTopicsDataCollection/src/utils/range.test.ts`
+
+Agent: Gemini
+Date/Time: 2026-01-15 JST
+Keywords: tests, range, http
+Topic: Add comprehensive tests for range resolution
+Details:
+- Expanded `src/utils/range.test.ts` to cover `deriveRangeFromHttp` logic.
+- Verifies that `from`/`until` parameters are respected when provided in GET/POST requests.
+- Verifies that the range defaults to today when parameters are missing.
+- Verifies that `defaultCronRange` returns the correct 21-day window.
+- Files changed:
+  - `PoliTopicsDataCollection/src/utils/range.test.ts`

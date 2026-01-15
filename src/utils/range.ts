@@ -33,7 +33,8 @@ export function deriveRangeFromSqsRecord(rec: any): RunRange | null {
 }
 
 export function defaultCronRange(): RunRange {
-  const d = dateStrJST(-21);
-  return { from: d, until: d };
+  const from = dateStrJST(-21);
+  const until = dateStrJST(0);
+  return { from, until };
 }
 
