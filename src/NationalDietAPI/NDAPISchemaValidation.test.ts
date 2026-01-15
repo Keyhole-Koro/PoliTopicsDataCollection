@@ -2,6 +2,13 @@ import { ValiError } from 'valibot';
 
 import { parseNationalDietResponse } from './NationalDietAPI';
 
+// Mock the notification module to verify side effects
+jest.mock('../lambda/notifications', () => ({
+  notifySchemaViolation: jest.fn(),
+}));
+
+import { notifySchemaViolation } from '../lambda/notifications';
+
 /*
  * parses valid payloads and normalizes array fields
  * [Contract] parseNationalDietResponse must coerce string/array fields to numbers/arrays and trim timestamps.
@@ -17,10 +24,10 @@ import { parseNationalDietResponse } from './NationalDietAPI';
  * [Odd] meetingRecord omitted entirely.
  * [History] None.
  *
- * throws when payload does not satisfy schema
- * [Contract] Invalid payloads must raise ValiError (e.g., non-numeric speechOrder).
- * [Reason] Guards Dynamo from malformed upstream data.
- * [Accident] Without this, corrupt records could be stored and break reducers.
+ * notifies when payload does not satisfy schema (instead of throwing)
+ * [Contract] Invalid payloads must trigger a Discord notification and return "best effort" data.
+ * [Reason] Monitor upstream changes without halting the entire ingestion pipeline.
+ * [Accident] Without this, data ingestion would stop completely on minor schema drifts.
  * [Odd] speechOrder set to string "NaN" to violate the contract.
  * [History] None.
  *
@@ -33,7 +40,11 @@ import { parseNationalDietResponse } from './NationalDietAPI';
  */
 
 describe('parseNationalDietResponse', () => {
-  test('parses valid payloads and normalizes array fields', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('parses valid payloads and normalizes array fields', async () => {
     const mockData = {
       numberOfRecords: '1',
       numberOfReturn: '1',
@@ -66,7 +77,7 @@ describe('parseNationalDietResponse', () => {
       },
     };
 
-    const result = parseNationalDietResponse(mockData);
+    const result = await parseNationalDietResponse(mockData);
 
     expect(result.numberOfRecords).toBe(1);
     const meetings = result.meetingRecord ?? [];
@@ -80,9 +91,10 @@ describe('parseNationalDietResponse', () => {
     expect(speeches[0]?.speechOrder).toBe(5);
     expect(speeches[0]?.createTime).toBe('2024-01-01');
     expect(speeches[0]?.updateTime).toBe('2024-01-01');
+    expect(notifySchemaViolation).not.toHaveBeenCalled();
   });
 
-  test('handles empty responses without meetingRecord data', () => {
+  test('handles empty responses without meetingRecord data', async () => {
     const mockData = {
       numberOfRecords: 0,
       numberOfReturn: 0,
@@ -90,13 +102,14 @@ describe('parseNationalDietResponse', () => {
       nextRecordPosition: null,
     };
 
-    const result = parseNationalDietResponse(mockData);
+    const result = await parseNationalDietResponse(mockData);
     expect(result.numberOfRecords).toBe(0);
     expect(result.meetingRecord).toEqual([]);
     expect(result.nextRecordPosition).toBeNull();
+    expect(notifySchemaViolation).not.toHaveBeenCalled();
   });
 
-  test('throws when payload does not satisfy schema', () => {
+  test('notifies when payload does not satisfy schema', async () => {
     const mockData = {
       numberOfRecords: 1,
       numberOfReturn: 1,
@@ -116,7 +129,7 @@ describe('parseNationalDietResponse', () => {
         speechRecord: [
           {
             speechID: 'sp-1',
-            speechOrder: 'NaN',
+            speechOrder: 'NaN', // Invalid: should be number or numeric string
             speaker: 'Member A',
             speakerYomi: 'Member A Yomi',
             speakerGroup: 'Group A',
@@ -133,9 +146,23 @@ describe('parseNationalDietResponse', () => {
       ],
     };
 
-    expect(() => parseNationalDietResponse(mockData)).toThrow(ValiError);
+    const result = await parseNationalDietResponse(mockData);
+
+    // Should call notification
+    expect(notifySchemaViolation).toHaveBeenCalled();
+    
+    // Should return the malformed data as-is (with normalization)
+    const meeting = result.meetingRecord?.[0];
+    const speech = meeting?.speechRecord?.[0];
+    
+    // Check that we still got the data back, even if invalid per schema
+    // Note: The normalization logic runs before validation, so some fields might be fixed or remain as is.
+    // speechOrder 'NaN' is string, normalization doesn't fix it if it expects number?
+    // The schema validation failed on it, but we get the object back.
+    expect(speech?.speechOrder).toBe('NaN'); 
   });
-  test('normalizes timestamp strings to YYYY-MM-DD', () => {
+
+  test('normalizes timestamp strings to YYYY-MM-DD', async () => {
     const mockData = {
       numberOfRecords: 1,
       numberOfReturn: 1,
@@ -170,10 +197,11 @@ describe('parseNationalDietResponse', () => {
       },
     };
 
-    const result = parseNationalDietResponse(mockData);
+    const result = await parseNationalDietResponse(mockData);
 
     const meeting = result.meetingRecord?.[0];
     expect(meeting?.speechRecord?.[0]?.createTime).toBe('2025-11-18');
     expect(meeting?.speechRecord?.[0]?.updateTime).toBe('2025-11-19');
+    expect(notifySchemaViolation).not.toHaveBeenCalled();
   });
 });

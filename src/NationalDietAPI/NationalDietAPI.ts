@@ -2,6 +2,7 @@ import { ValiError, safeParse, type BaseIssue } from 'valibot';
 
 import { rawMeetingDataSchema, type RawMeetingData } from '@NationalDietAPI/Raw';
 import { readCachedPayload, writeCachedPayload } from './cache';
+import { notifySchemaViolation } from '../lambda/notifications';
 
 function normalizeMeetingRecords(value: unknown): unknown[] {
   if (!value) {
@@ -67,17 +68,18 @@ function normalizeDateOnly(value: unknown): string | undefined {
   return parsed.toISOString().split('T')[0];
 }
 
-export function parseNationalDietResponse(payload: unknown): RawMeetingData {
+export async function parseNationalDietResponse(payload: unknown): Promise<RawMeetingData> {
   const normalizedPayload = normalizePayloadShape(payload);
   const parsedResult = safeParse(rawMeetingDataSchema, normalizedPayload);
   if (!parsedResult.success) {
-    const aggregated = parsedResult.issues.map(formatIssue).join("; ");
+    const issues = parsedResult.issues.map(formatIssue);
+    const aggregated = issues.join("; ");
     console.warn("[NationalDietAPI] Payload validation failed", { issues: parsedResult.issues });
-    const error = new ValiError(parsedResult.issues);
-    if (aggregated) {
-      error.message = aggregated;
-    }
-    throw error;
+    
+    await notifySchemaViolation(aggregated, issues);
+
+    const casted = normalizedPayload as RawMeetingData;
+    return { ...casted, meetingRecord: casted.meetingRecord ?? [] };
   }
   const parsed = parsedResult.output;
   return { ...parsed, meetingRecord: parsed.meetingRecord ?? [] };
@@ -140,7 +142,7 @@ async function fetchNationalDietRecords(
       await writeCachedPayload(url, payload);
     }
 
-    return parseNationalDietResponse(payload);
+    return await parseNationalDietResponse(payload);
   } catch (error) {
     console.error('Failed to fetch records:', error);
     throw error;

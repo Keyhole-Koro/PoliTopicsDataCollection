@@ -119,3 +119,26 @@ export async function notifyTaskWriteFailure(task: IssueTask, error: unknown): P
     label: "data-collection-task-write-failed",
   });
 }
+
+export async function notifySchemaViolation(message: string, issues: string[]): Promise<void> {
+  const fields: DiscordField[] = [
+    { name: "Message", value: message },
+  ];
+
+  if (issues.length > 0) {
+    // Discord field value limit is 1024 chars. Truncate if needed.
+    const joined = issues.join("\n").slice(0, 1000);
+    fields.push({ name: "Issues", value: joined });
+  }
+
+  await sendNotification({
+    environment: appConfig.environment,
+    webhook: appConfig.notifications.warnWebhook,
+    fallbackWebhook: appConfig.notifications.errorWebhook,
+    title: "Schema Violation",
+    content: ":warning: National Diet API schema violation detected",
+    color: DISCORD_COLORS.warn,
+    fields,
+    label: "data-collection-schema-violation",
+  });
+}

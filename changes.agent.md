@@ -81,7 +81,20 @@ Topic: Add comprehensive tests for range resolution
 Details:
 - Expanded `src/utils/range.test.ts` to cover `deriveRangeFromHttp` logic.
 - Verifies that `from`/`until` parameters are respected when provided in GET/POST requests.
-- Verifies that the range defaults to today when parameters are missing.
 - Verifies that `defaultCronRange` returns the correct 21-day window.
 - Files changed:
   - `PoliTopicsDataCollection/src/utils/range.test.ts`
+
+Agent: Gemini
+Date/Time: 2026-01-15 JST
+Keywords: discord, schema-validation, notification
+Topic: Soft-validate National Diet API schema and notify Discord
+Details:
+- Updated `parseNationalDietResponse` to no longer throw on validation failure.
+- Instead, it now sends a "Schema Violation" warning to Discord via `notifySchemaViolation` and returns a best-effort casted object.
+- Added `notifySchemaViolation` to `src/lambda/notifications.ts`.
+- Updated `NDAPISchemaValidation.test.ts` to verify the new behavior (async, no throw, side-effect called).
+- Files changed:
+  - `PoliTopicsDataCollection/src/lambda/notifications.ts`
+  - `PoliTopicsDataCollection/src/NationalDietAPI/NationalDietAPI.ts`
+  - `PoliTopicsDataCollection/src/NationalDietAPI/NDAPISchemaValidation.test.ts`
