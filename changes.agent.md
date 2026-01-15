@@ -98,3 +98,13 @@ Details:
   - `PoliTopicsDataCollection/src/lambda/notifications.ts`
   - `PoliTopicsDataCollection/src/NationalDietAPI/NationalDietAPI.ts`
   - `PoliTopicsDataCollection/src/NationalDietAPI/NDAPISchemaValidation.test.ts`
+
+Agent: Gemini
+Date/Time: 2026-01-15 JST
+Keywords: logging, debug
+Topic: Enhance logs for debugging
+Details:
+- Added structured logs to `src/lambda_handler.ts` to trace run steps, meeting processing, and task creation.
+- Logs include range details, fetch counts, and task IDs.
+- Files changed:
+  - `PoliTopicsDataCollection/src/lambda_handler.ts`

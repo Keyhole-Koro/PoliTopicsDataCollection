@@ -43,6 +43,8 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
   }
 
   const range = rangeOrResponse;
+  console.log(`[DataCollection] Starting run for range: ${JSON.stringify(range)}`);
+
   const summary = {
     range,
     meetingsProcessed: 0,
@@ -53,6 +55,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
 
   try {
     const { meetings, recordCount } = await fetchMeetingsForRange(nationalDietApiEndpoint, range);
+    console.log(`[DataCollection] Fetched ${meetings.length} meetings (total records: ${recordCount})`);
 
     if (!recordCount || !meetings.length) {
       console.log(`No meetings found for range ${range.from} to ${range.until}`);
@@ -74,6 +77,8 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
 
     for (const meeting of meetings) {
       const meetingIssueID = meeting.issueID?.trim();
+      console.log(`[DataCollection] Processing meeting: ${meetingIssueID} - ${meeting.nameOfMeeting}`);
+      
       if (!meetingIssueID) {
         console.warn('[Meeting] Missing issueID; skipping meeting with payload:', {
           date: meeting.date,
@@ -104,11 +109,13 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
       });
 
       if (!issueTask) {
+        console.log(`[DataCollection] Skipped task creation for ${meetingIssueID} (filtered or empty)`);
         continue;
       }
 
       try {
         await taskRepo.createTask(issueTask);
+        console.log(`[DataCollection] Created task for ${meetingIssueID}: mode=${issueTask.processingMode}, chunks=${issueTask.chunks.length}`);
         summary.createdCount += 1;
         summary.issueIds.push(meetingIssueID);
       } catch (error: any) {
