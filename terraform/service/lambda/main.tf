@@ -46,7 +46,7 @@ resource "aws_iam_role_policy_attachment" "dynamodb_tasks" {
 
 locals {
   prompt_bucket_arn = "arn:aws:s3:::${var.prompt_bucket}"
-  error_bucket_name = trimspace(coalesce(var.error_bucket, ""))
+  error_bucket_name = var.error_bucket != null ? trimspace(var.error_bucket) : ""
   s3_write_resources = concat(
     ["${local.prompt_bucket_arn}/*"],
     local.error_bucket_name != "" ? ["arn:aws:s3:::${local.error_bucket_name}/*"] : [],
@@ -81,7 +81,7 @@ locals {
   env_vars = merge(
     {
       PROMPT_BUCKET  = var.prompt_bucket
-      ERROR_BUCKET   = coalesce(var.error_bucket, "")
+      ERROR_BUCKET   = var.error_bucket != null ? var.error_bucket : ""
       LLM_TASK_TABLE = var.task_table_name
     },
     var.environment_variables,
@@ -97,7 +97,7 @@ locals {
 }
 
 locals {
-  function_name_override = trimspace(coalesce(var.function_name_override, ""))
+  function_name_override = var.function_name_override != null ? trimspace(var.function_name_override) : ""
   function_name          = local.function_name_override != "" ? local.function_name_override : "${var.name_prefix}-data-collection-fn"
 }
 

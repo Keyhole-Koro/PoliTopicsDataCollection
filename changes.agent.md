@@ -108,3 +108,16 @@ Details:
 - Logs include range details, fetch counts, and task IDs.
 - Files changed:
   - `PoliTopicsDataCollection/src/lambda_handler.ts`
+
+Agent: Gemini
+Date/Time: 2026-01-18 10:00:00 JST
+Keywords: documentation, translation, japanese
+Topic: Translate documentation to Japanese
+Details:
+- Translated `readme.md`, `doc/scripts_and_usage.md`, and `doc/terraform-localstack.md` to Japanese in `jp/` subdirectories.
+- Added links between English and Japanese versions.
+Files:
+- PoliTopicsDataCollection/readme.md
+- PoliTopicsDataCollection/jp/readme.md
+- PoliTopicsDataCollection/doc/jp/scripts_and_usage.md
+- PoliTopicsDataCollection/doc/jp/terraform-localstack.md

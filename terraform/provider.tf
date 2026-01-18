@@ -19,8 +19,8 @@ terraform {
 provider "aws" {
   region = var.aws_region
 
-  access_key = local.provider_custom_endpoint ? coalesce(var.aws_access_key, "test") : var.aws_access_key
-  secret_key = local.provider_custom_endpoint ? coalesce(var.aws_secret_key, "test") : var.aws_secret_key
+  access_key = local.provider_custom_endpoint ? (var.aws_access_key != null ? var.aws_access_key : "test") : var.aws_access_key
+  secret_key = local.provider_custom_endpoint ? (var.aws_secret_key != null ? var.aws_secret_key : "test") : var.aws_secret_key
   token      = var.aws_session_token
 
   s3_use_path_style           = var.aws_endpoint_url != null
