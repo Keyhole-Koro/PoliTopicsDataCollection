@@ -1,5 +1,5 @@
 # Terraform + LocalStack Quickstart
-[Japanese Version](./jp/terraform-localstack.md)
+[日本語版](./jp/terraform-localstack.md)
 
 Deploy the complete PoliTopics stack into LocalStack with Terraform to exercise the Lambda, S3, and DynamoDB task workflows end-to-end (the previous `src/local_invoke.ts` helper is gone). Stage/production instructions live elsewhere—this document is purely for the local workflow.
 

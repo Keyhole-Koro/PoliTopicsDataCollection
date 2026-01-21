@@ -121,3 +121,16 @@ Files:
 - PoliTopicsDataCollection/jp/readme.md
 - PoliTopicsDataCollection/doc/jp/scripts_and_usage.md
 - PoliTopicsDataCollection/doc/jp/terraform-localstack.md
+
+Agent: Codex
+Date/Time: 2026-01-21 23:49:05 JST
+Keywords: documentation, architecture, mermaid
+Topic: Rewrite README with diagram and cleanup
+Details:
+- Rewrote module README (EN/JP) to highlight S3 prompts, DynamoDB tasks, 21-day range, and LocalStack workflow; embedded Mermaid architecture.
+- Removed legacy scripts_and_usage docs.
+Files:
+- PoliTopicsDataCollection/readme.md
+- PoliTopicsDataCollection/jp/readme.md
+- PoliTopicsDataCollection/doc/scripts_and_usage.md (deleted)
+- PoliTopicsDataCollection/doc/jp/scripts_and_usage.md (deleted)

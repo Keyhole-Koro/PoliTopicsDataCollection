@@ -1,91 +1,75 @@
-# PoliTopics-Data-Collection
-[Japanese Version](./jp/readme.md)
+# PoliTopics Data Collection
+[日本語版](./jp/readme.md)
 
-PoliTopics-Data-Collection is a serverless data pipeline that downloads Japanese National Diet records, breaks them into LLM-friendly prompt chunks, stores the payloads in S3, and tracks fan-out task state entirely in DynamoDB. The codebase is written in TypeScript and targets AWS Lambda; Terraform modules define the cloud deployment and LocalStack enables a local-first workflow.
+Serverless ingestion for the National Diet: fetch records, split them into prompt chunks, store prompts in S3, and register LLM tasks in DynamoDB. Built with TypeScript on AWS Lambda, provisioned by Terraform, and runnable on LocalStack.
 
-## Requirements
+## Architecture
 
-- Node.js 22+
-- npm
-- Docker (LocalStack)
-- AWS CLI
-- Terraform v1.6
-- `zip` (needed when creating deployment bundles)
-- Gemini API key
+```mermaid
+flowchart LR
+  %% ========== Data Collection ==========
+  subgraph DC[PoliTopicsDataCollection / Ingestion Service]
+    IngestSchedule["EventBridge (Cron)<br/>IngestSchedule"]
+    IngestLambda["AWS Lambda (Node.js)<br/>IngestLambda"]
+    PromptBucket[(Amazon S3<br/>PromptBucket)]
+    TaskTable[(DynamoDB<br/>TaskTable: llm_task_table)]
+  end
 
-## Configuration
+  NationalDietAPI["External<br/>NationalDietAPI<br/>(国会議事録API)"]
 
-Environment variables drive most behaviors:
+  IngestSchedule -->|Triggers| IngestLambda
+  IngestLambda -->|Fetches Data| NationalDietAPI
+  IngestLambda -->|Stores Raw Text| PromptBucket
+  IngestLambda -->|Enqueues Task| TaskTable
+```
 
-- `GOOGLE_API_KEY` and `GEMINI_MAX_INPUT_TOKEN` configure Gemini access.
-- `LLM_TASK_TABLE` is the DynamoDB table where prompt tasks are stored.
-- `RUN_API_KEY` secures the API Gateway entry point.
-- `AWS_REGION` defaults to `ap-northeast-3`; override when using another region.
-- `AWS_ENDPOINT_URL` targets LocalStack when developing locally (for example, `http://localhost:4566`).
-- `ERROR_BUCKET` enables run logs in S3 (`success/` and `error/` prefixes).
+Notes
+- Scheduler queries from 21 days ago to today because the Diet API publishes with a short lag after meetings.
+- Prompts live in S3; task metadata in DynamoDB; Discord webhooks for error/warn/batch.
+- Local-first via LocalStack; same Lambda bundle deploys to stage/prod.
 
-Provide these via `.env`, your shell, or the AWS Lambda configuration.
+## Commands
+- Install: `npm install`
+- Ensure LocalStack resources: `npm run ensure:localstack`
+- Test (LocalStack): `npm test` (`APP_ENVIRONMENT=localstackTest`, `pretest` applies resources)
+- Test (gha): `npm run test:gha`
+- Build Lambda bundle: `npm run build`
 
-### Terraform Local Runs
+## Environment
+- `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
+- `GEMINI_API_KEY`
+- `RUN_API_KEY`
+- `LLM_TASK_TABLE`
+- `PROMPT_BUCKET` (S3 for prompts)
+- `ERROR_BUCKET` (optional run logs)
+- `DISCORD_WEBHOOK_ERROR`, `DISCORD_WEBHOOK_WARN`, `DISCORD_WEBHOOK_BATCH`
+- AWS: `AWS_REGION` (default `ap-northeast-3`), `AWS_ENDPOINT_URL` for LocalStack
 
-./doc/terraform-localstack.md
+Tip: `source ../scripts/export_test_env.sh` from the repo root to load common LocalStack defaults.
 
-### Terraform Commands (LocalStack)
+## Local run & invoke
+1) Start LocalStack (root `docker-compose.yml`).
+2) `npm run ensure:localstack`
+3) Invoke `/run` with your key:
+```bash
+curl -H "x-api-key: $RUN_API_KEY" \
+     -H "Content-Type: application/json" \
+     -X POST "$API_ENDPOINT/run" \
+     -d '{"from":"2025-01-01","until":"2025-01-05"}'
+```
 
-Quick reference for the common Terraform workflow when targeting LocalStack:
-
+## Terraform
+- LocalStack guide: `doc/terraform-localstack.md`
+- Typical flow:
 ```bash
 cd terraform
 terraform init -backend-config=backends/local.hcl
 terraform plan -var-file=tfvars/localstack.tfvars -out=tfplan
-terraform apply "tfplan"
-```
-
-### Invoke the `/run` endpoint
-
-After applying Terraform (stage/production or LocalStack with `enable_http_api = true`), fetch the HTTP API endpoint and call `/run` with the configured API key:
-
-```bash
-export RUN_API_KEY=...
-ENDPOINT=...
-curl -H "x-api-key: $RUN_API_KEY" \
-     -H "Content-Type: application/json" \
-     -X POST "$ENDPOINT/run" \
-     -d '{"from":"2024-12-01","until":"2024-12-15"}'
-```
-
-## Create state bucket
-
-```bash
-./create-state-bucket.sh stage
-./create-state-bucket.sh production
-# LocalStack (defaults to http://localstack:4566; override via LOCALSTACK_ENDPOINT)
-./create-state-bucket.sh local
-LOCALSTACK_ENDPOINT=http://localstack:4566 ./create-state-bucket.sh local
-```
-
-## Import manually
-
-```bash
-./import_all.sh tfvars/stage.tfvars
+terraform apply tfplan
 ```
 
 ## Observability
-
-When `ERROR_BUCKET` is set the Lambda writes run metadata to S3:
-
-- `success/` - completed runs
-- `error/` - serialized error payloads
-
-Example object keys:
-
-```
-success/2025-08-11T13:48:32.270Z-<uuid>.json
-error/2025-08-11T14:05:12.100Z-<uuid>.json
-```
-
-Cloud logs flow to CloudWatch in AWS or to your LocalStack logging output during local development.
-
-## Future Update
-
-check the updates by national diet api, store lastModification column into out dynamodb
+- S3 run logs when `ERROR_BUCKET` is set:
+  - `success/<timestamp>-<uuid>.json`
+  - `error/<timestamp>-<uuid>.json`
+- CloudWatch for Lambda; LocalStack logs during local runs.
