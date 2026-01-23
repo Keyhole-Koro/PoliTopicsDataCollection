@@ -90,7 +90,7 @@ variable "discord_webhook_batch" {
 variable "schedule_expression" {
   description = "EventBridge schedule expression (cron or rate)"
   type        = string
-  default     = "cron(0 16 * * ? *)"
+  default     = "cron(0 20 * * ? *)"
 }
 
 variable "tags" {
