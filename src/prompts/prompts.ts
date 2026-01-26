@@ -5,7 +5,7 @@ export const instruction_common = `【目的】
 
 タスクは3モード:
 - chunk: 会議全体の一部（発言群）を処理し、reduce統合を見越した middle_summary を中心に出力。soft_language_summary と summary は必須。
-- reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の summary / soft_language_summary に加え、title / category / description / date / participants を生成。
+- reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の summary / soft_language_summary に加え、title / category / description / date / participants / key_points を生成。
 - single_chunk: 会議全体が1chunkで収まる場合に chunk / reduce の両出力を同時に提供。chunkセクションは chunkモード同等、reduceセクションは reduceモード同等の厳密さで記述する。
 
 厳守:
@@ -31,15 +31,16 @@ export const instruction_chunk = `【chunkモードの出力指針】
 export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。
 - participants は chunk由来の重複/別表記を正規化し、一人につき要旨を統合。役職や所属は可能なら統合、曖昧なら空欄可。
-- 出力は title / category / description / date / summary / soft_language_summary / participants。
+- 出力は title / category / description / date / summary / soft_language_summary / participants / key_points。
 - summary 構成（推奨）: 決定事項 / 主要論点と立場 / 未決・宿題 / 次に起こること（担当・期限） / 重要数値。
+- key_points: 記事のTL;DR（要約）として、議論の核心・結論・影響を3点程度の箇条書きで簡潔にまとめる。
 - based_on_orders は統合後に参照した order のユニオンまたは代表範囲。
 - dialogs / terms / keywords は出力しない。`;
 
 export const instruction_single_chunk = `【single_chunkモード（統合出力）の指針】
 - 出力は chunk / reduce に分けず、single_chunk として1つのJSONに統合する。
 - middle_summary・dialogs・terms・keywords は chunk粒度として作成する。
-- title / category / description / date / summary / soft_language_summary / participants は meeting粒度として完成形で出力する。
+- title / category / description / date / summary / soft_language_summary / participants / key_points は meeting粒度として完成形で出力する。
 - summary は middle_summary の要点を昇華・統合した構造化要約とする。
 - chunk粒度と meeting粒度で内容を矛盾させない。
 - based_on_orders は該当するすべての要約・participantsに必ず付与する。
@@ -102,6 +103,12 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
   "description": "1〜2文＋必要なら箇条書きで全体像をひと目で伝える",
   "date": "開催日 (YYYY-MM-DD) または 空文字",
 
+  "key_points": [
+    "TL;DR要点1 (核心)",
+    "TL;DR要点2 (結論)",
+    "TL;DR要点3 (影響)"
+  ],
+
   "summary": {
     "based_on_orders": [1,2,3,4,5],
     "summary": "会議全体の最終要約（決定事項/主要論点/未決・宿題/次に起こること/重要数値を簡潔に）"
@@ -132,6 +139,12 @@ export const output_format_single_chunk = `### 出力フォーマット（single
   "category": "会議全体を表すカテゴリ",
   "description": "1〜2文＋必要なら箇条書きで全体像を説明",
   "date": "開催日 (YYYY-MM-DD) または 空文字",
+
+  "key_points": [
+    "TL;DR要点1 (核心)",
+    "TL;DR要点2 (結論)",
+    "TL;DR要点3 (影響)"
+  ],
 
   "middle_summary": [
     {
