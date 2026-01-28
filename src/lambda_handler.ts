@@ -6,7 +6,6 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { chunk_prompt, reduce_prompt, single_chunk_prompt } from '@prompts/prompts';
-import { getAwsS3ClientConfig } from '@utils/aws';
 import { appConfig } from './config';
 
 import { resJson, isApiResponse } from './lambda/httpResponses';
@@ -22,7 +21,7 @@ import {
 
 const PROMPT_BUCKET = appConfig.promptBucket;
 const RUN_ID_PLACEHOLDER = '';
-const s3 = new S3Client(getAwsS3ClientConfig());
+const s3 = new S3Client(appConfig.aws);
 const taskRepo = new TaskRepository();
 
 const nationalDietApiEndpoint = appConfig.nationalDietApiEndpoint;

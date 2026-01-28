@@ -7,7 +7,6 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 
-import { getAwsClientConfig } from '@utils/aws';
 import { appConfig } from '../config';
 
 const STATUS_INDEX = 'StatusIndex';
@@ -57,8 +56,8 @@ export type IssueTask = {
 };
 
 function createDocumentClient(): DynamoDBDocumentClient {
-  const cfg = getAwsClientConfig();
-  const client = new DynamoDBClient(cfg);
+  const { region, endpoint, credentials } = appConfig.aws;
+  const client = new DynamoDBClient({ region, endpoint, credentials });
   return DynamoDBDocumentClient.from(client, {
     marshallOptions: { removeUndefinedValues: true },
   });

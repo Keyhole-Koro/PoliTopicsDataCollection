@@ -1,3 +1,5 @@
+import type { S3ClientConfig } from "@aws-sdk/client-s3"
+
 export type AppEnvironment = "local" | "stage" | "prod" | "ghaTest" | "localstackTest"
 
 export type AppConfig = {
