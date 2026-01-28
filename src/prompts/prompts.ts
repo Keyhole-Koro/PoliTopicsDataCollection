@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2026-01-28.1";
+export const PROMPT_VERSION = "2026-01-28.2";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -18,6 +18,7 @@ export const instruction_common = `【目的】
 - 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
 - JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
+- summary / soft_language_summary / middle_summary / participants / dialogs の本文には (order: 1) のような order 情報やメタ注記を書かない（order / based_on_orders の配列でのみ表現）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
 export const instruction_chunk = `【chunkモードの出力指針】
