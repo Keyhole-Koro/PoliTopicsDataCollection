@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2025-12-22.1";
+export const PROMPT_VERSION = "2026-01-28.1";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -12,7 +12,11 @@ export const instruction_common = `【目的】
 - middle_summary は「1トピック=1要点」。重複回避、結論/対立/未決/宿題/担当/期限/金額を明示できる範囲で。
 - すべての要点に based_on_orders（発言 order 配列）を付与。
 - 余談や定型挨拶は除外。推測や創作は禁止。
-- summary / soft_language_summary / middle_summary は Markdown の機能を自由に使ってよい。
+- summary / soft_language_summary は Markdown を必ず活用する（見出し＋箇条書きは必須）。プレーンテキストのみは禁止。
+- summary / soft_language_summary は見出し（## / ###）＋箇条書き（-）を必須とし、視認性を優先する。
+- middle_summary.summary は **ラベル** ＋短い箇条書きを必須とし、1トピック内に留める。
+- 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
+- JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
@@ -32,6 +36,7 @@ export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。
 - participants は chunk由来の重複/別表記を正規化し、一人につき要旨を統合。役職や所属は可能なら統合、曖昧なら空欄可。
 - 出力は title / category / description / date / summary / soft_language_summary / participants / key_points。
+- description は一般読者が「なぜ重要か」「自分にどう関係するか」を直感的に掴める内容にする（1〜2文＋必要なら箇条書き）。
 - summary 構成（推奨）: 決定事項 / 主要論点と立場 / 未決・宿題 / 次に起こること（担当・期限） / 重要数値。
 - key_points: 記事のTL;DR（要約）として、議論の核心・結論・影響を3点程度の箇条書きで簡潔にまとめる。
 - based_on_orders は統合後に参照した order のユニオンまたは代表範囲。
@@ -41,6 +46,7 @@ export const instruction_single_chunk = `【single_chunkモード（統合出力
 - 出力は chunk / reduce に分けず、single_chunk として1つのJSONに統合する。
 - middle_summary・dialogs・terms・keywords は chunk粒度として作成する。
 - title / category / description / date / summary / soft_language_summary / participants / key_points は meeting粒度として完成形で出力する。
+- description は一般読者が「なぜ重要か」「自分にどう関係するか」を直感的に掴める内容にする（1〜2文＋必要なら箇条書き）。
 - summary は middle_summary の要点を昇華・統合した構造化要約とする。
 - chunk粒度と meeting粒度で内容を矛盾させない。
 - based_on_orders は該当するすべての要約・participantsに必ず付与する。
@@ -56,17 +62,17 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
   "middle_summary": [
     {
       "based_on_orders": [4,5],
-      "summary": "reduceで統合しやすい1要点（決定/対立/未決/宿題/担当/期限/金額を簡潔に）"
+      "summary": "**論点:** reduceで統合しやすい1要点\\n- **結論:** ...\\n- **担当/期限:** ..."
     }
   ],
 
   "soft_language_summary": {
     "based_on_orders": [1,2,3],
-    "summary": "やさしい言葉での説明（このchunk範囲）"
+    "summary": "## このchunkのポイント\\n- ...\\n- ...\\n## 生活への影響\\n- ..."
   },
   "summary": {
     "based_on_orders": [1,2,3],
-    "summary": "このchunk範囲の詳細要約"
+    "summary": "## 決定事項\\n- **結論:** ...\\n- **担当:** ...\\n## 主要論点\\n- ...\\n## 未決・宿題\\n- ...\\n### 数値・期限（該当時のみ）\\n|項目|内容|\\n|---|---|\\n|予算|...|"
   },
 
   "dialogs": [
@@ -100,7 +106,7 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
 
   "title": "要点がひと目で分かる見出し（最終）",
   "category": "会議全体を表すカテゴリ（主要テーマや種別を簡潔に）",
-  "description": "1〜2文＋必要なら箇条書きで全体像をひと目で伝える",
+  "description": "一般読者が「なぜ重要か」「自分にどう関係するか」が分かる内容（1〜2文＋必要なら箇条書き）",
   "date": "開催日 (YYYY-MM-DD) または 空文字",
 
   "key_points": [
@@ -111,11 +117,11 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
 
   "summary": {
     "based_on_orders": [1,2,3,4,5],
-    "summary": "会議全体の最終要約（決定事項/主要論点/未決・宿題/次に起こること/重要数値を簡潔に）"
+    "summary": "## 決定事項\\n- **結論:** ...\\n- **担当:** ...\\n## 主要論点と立場\\n- ...\\n## 未決・宿題\\n- ...\\n## 次に起こること\\n- ...\\n### 重要数値・期限（該当時のみ）\\n|項目|内容|\\n|---|---|\\n|期限|...|"
   },
   "soft_language_summary": {
     "based_on_orders": [1,2,3,4,5],
-    "summary": "会議全体をやさしい言葉で説明した要約"
+    "summary": "## 会議の全体像\\n- ...\\n- ...\\n## 暮らしへの影響\\n- ..."
   },
 
   "participants": [
@@ -137,7 +143,7 @@ export const output_format_single_chunk = `### 出力フォーマット（single
 
   "title": "single chunkから導く会議全体の見出し",
   "category": "会議全体を表すカテゴリ",
-  "description": "1〜2文＋必要なら箇条書きで全体像を説明",
+  "description": "一般読者が「なぜ重要か」「自分にどう関係するか」が分かる内容（1〜2文＋必要なら箇条書き）",
   "date": "開催日 (YYYY-MM-DD) または 空文字",
 
   "key_points": [
@@ -155,11 +161,11 @@ export const output_format_single_chunk = `### 出力フォーマット（single
 
   "soft_language_summary": {
     "based_on_orders": [1,2,3],
-    "summary": "やさしい言葉での説明（会議全体）"
+    "summary": "## 会議の全体像\\n- ...\\n- ...\\n## 暮らしへの影響\\n- ..."
   },
   "summary": {
     "based_on_orders": [1,2,3,4,5],
-    "summary": "会議全体の最終要約（決定事項 / 主要論点 / 未決・宿題 / 次に起こること / 重要数値）"
+    "summary": "## 決定事項\\n- **結論:** ...\\n- **担当:** ...\\n## 主要論点\\n- ...\\n## 未決・宿題\\n- ...\\n## 次に起こること\\n- ...\\n### 重要数値・期限（該当時のみ）\\n|項目|内容|\\n|---|---|\\n|予算|...|"
   },
 
   "dialogs": [
