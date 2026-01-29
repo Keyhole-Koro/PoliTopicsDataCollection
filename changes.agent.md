@@ -134,3 +134,24 @@ Files:
 - PoliTopicsDataCollection/jp/readme.md
 - PoliTopicsDataCollection/doc/scripts_and_usage.md (deleted)
 - PoliTopicsDataCollection/doc/jp/scripts_and_usage.md (deleted)
+
+Agent: Codex
+Date/Time: 2026-01-29 09:43 JST
+Keywords: tasks, prompt_version, dynamodb, schema
+Topic: Add prompt_version to LLM task records
+Details:
+- Added prompt_version to DataCollection task schema and task builder outputs.
+- Updated LocalStack/DynamoDB tests to assert prompt_version is persisted.
+Files:
+- PoliTopicsDataCollection/src/DynamoDB/tasks.ts
+- PoliTopicsDataCollection/src/lambda/taskBuilder.ts
+- PoliTopicsDataCollection/src/lambda_handler.ts
+- PoliTopicsDataCollection/src/DynamoDB/tasks.localstack.test.ts
+- PoliTopicsDataCollection/src/DynamoDB/tasks.chunk.mock.test.ts
+- PoliTopicsDataCollection/src/lambda_handler.mock.test.ts
+
+### Changes After Review
+- Added a small retry delay in the LocalStack task test to avoid read-after-write flakiness without consistent reads.
+- Files changed:
+  - `PoliTopicsDataCollection/src/DynamoDB/tasks.ts`
+  - `PoliTopicsDataCollection/src/DynamoDB/tasks.localstack.test.ts`

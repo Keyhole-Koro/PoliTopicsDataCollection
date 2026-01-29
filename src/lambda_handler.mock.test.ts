@@ -3,6 +3,7 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import type { RawMeetingData, RawSpeechRecord } from '@NationalDietAPI/Raw';
+import { PROMPT_VERSION } from '@prompts/prompts';
 
 import {
   CreateTableCommand,
@@ -301,6 +302,7 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
       expect(Array.isArray(stored.Item?.chunks)).toBe(true);
       expect(stored.Item?.chunks?.length ?? 0).toBe(0);
       expect(typeof stored.Item?.prompt_url).toBe('string');
+      expect(stored.Item?.prompt_version).toBe(PROMPT_VERSION);
 
       fetchMock.mockRestore();
     }, 60000);
@@ -399,6 +401,7 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
       expect(stored.Item?.chunks?.length).toBe(0);
       expect(stored.Item?.chunks?.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')).toBe(true);
       expect(typeof stored.Item?.prompt_url).toBe('string');
+      expect(stored.Item?.prompt_version).toBe(PROMPT_VERSION);
 
       fetchMock.mockRestore();
     }, 60000);

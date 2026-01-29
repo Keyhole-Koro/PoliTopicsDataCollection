@@ -11,6 +11,7 @@ import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LOCALSTACK_URL } from '../testUtils/testEnv';
 import { appConfig } from '../config';
+import { PROMPT_VERSION } from '../prompts/prompts';
 
 /*
  * creates a chunked task in LocalStack DynamoDB
@@ -56,6 +57,7 @@ const createChunkedTask = (issueID: string, chunkCount: number): IssueTask => {
     createdAt,
     updatedAt: createdAt,
     processingMode: 'chunked',
+    prompt_version: PROMPT_VERSION,
     prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${issueID}_reduce.json`,
     meeting: {
       issueID,

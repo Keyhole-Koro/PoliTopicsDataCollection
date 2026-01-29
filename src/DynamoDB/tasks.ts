@@ -48,6 +48,7 @@ export type IssueTask = {
   createdAt: string;
   updatedAt: string;
   processingMode: ReduceProcessingMode;
+  prompt_version: string;
   prompt_url: string;
   meeting: Meeting;
   result_url: string;

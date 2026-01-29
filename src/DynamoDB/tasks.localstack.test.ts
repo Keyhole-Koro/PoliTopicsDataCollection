@@ -10,6 +10,7 @@ import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
+import { PROMPT_VERSION } from '../prompts/prompts';
 
 /*
  * creates tasks with chunk metadata and lists pending items
@@ -47,6 +48,7 @@ const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTa
     createdAt,
     updatedAt: createdAt,
     processingMode: args.chunkCount ? 'chunked' : 'single_chunk',
+    prompt_version: PROMPT_VERSION,
     prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${args.issueID}_reduce.json`,
     meeting: {
       issueID: args.issueID,
@@ -102,6 +104,23 @@ describe('TaskRepository LocalStack integration', () => {
       process.env = ORIGINAL_ENV;
     });
 
+    async function delay(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function waitForTask(issueID: string, opts: { attempts?: number; delayMs?: number } = {}): Promise<IssueTask | undefined> {
+      const attempts = opts.attempts ?? 20;
+      const delayMs = opts.delayMs ?? 100;
+      for (let i = 0; i < attempts; i += 1) {
+        const task = await repository.getTask(issueID);
+        if (task) {
+          return task;
+        }
+        await delay(delayMs);
+      }
+      return undefined;
+    }
+
     /*
      Contract: ensures TaskRepository can persist chunked tasks and list them via the StatusIndex; failure means write/query paths or index definitions changed.
      Reason: chunked tasks are the dominant mode for large meetings; this validates LocalStack wiring and schema expectations.
@@ -116,7 +135,7 @@ describe('TaskRepository LocalStack integration', () => {
       const pending = await repository.getNextPending(5);
       expect(pending.every((task) => task.status === "pending")).toBe(true);
 
-      const stored = await repository.getTask(issueID);
+      const stored = await waitForTask(issueID);
       expect(stored?.chunks.length).toBe(2);
       expect(stored?.chunks.every((chunk) => chunk.status === 'notReady')).toBe(true);
     }, 20000);

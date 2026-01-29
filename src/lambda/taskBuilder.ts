@@ -97,6 +97,7 @@ export async function buildTasksForMeeting(args: {
   chunkPromptTemplate: string;
   reducePromptTemplate: string;
   singleChunkPromptTemplate: string;
+  promptVersion: string;
   availableTokens: number;
   range: RunRange;
   bucket: string;
@@ -110,6 +111,7 @@ export async function buildTasksForMeeting(args: {
     chunkPromptTemplate,
     reducePromptTemplate,
     singleChunkPromptTemplate,
+    promptVersion,
     availableTokens,
     range,
     bucket,
@@ -198,6 +200,7 @@ export async function buildTasksForMeeting(args: {
       createdAt,
       updatedAt,
       processingMode: 'single_chunk',
+      prompt_version: promptVersion,
       prompt_url: `s3://${bucket}/${singleChunkPromptKey}`,
       meeting: meetingInfo,
       result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,
@@ -274,6 +277,7 @@ export async function buildTasksForMeeting(args: {
     createdAt,
     updatedAt,
     processingMode: 'chunked',
+    prompt_version: promptVersion,
     prompt_url: `s3://${bucket}/${reducePromptKey}`,
     meeting: meetingInfo,
     result_url: `s3://${bucket}/results/${meetingIssueID}_reduce.json`,

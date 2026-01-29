@@ -5,7 +5,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import { chunk_prompt, reduce_prompt, single_chunk_prompt } from '@prompts/prompts';
+import { chunk_prompt, reduce_prompt, single_chunk_prompt, PROMPT_VERSION } from '@prompts/prompts';
 import { appConfig } from './config';
 
 import { resJson, isApiResponse } from './lambda/httpResponses';
@@ -98,6 +98,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         chunkPromptTemplate,
         reducePromptTemplate,
         singleChunkPromptTemplate,
+        promptVersion: PROMPT_VERSION,
         availableTokens,
         range,
         bucket: PROMPT_BUCKET,
