@@ -3,7 +3,7 @@ import { appConfig, setAppConfig, setAppEnvironment, updateAppConfig } from "../
 
 export type EnvMap = Record<string, string | undefined>
 
-export const DEFAULT_PROMPT_BUCKET = "politopics-prompts"
+export const DEFAULT_PROMPT_BUCKET = "politopics-llm-artifacts-local"
 export const DEFAULT_ND_ENDPOINT = "https://kokkai.ndl.go.jp/api/meeting"
 export const DEFAULT_LOCALSTACK_URL = "http://localstack:4566"
 export const DEFAULT_LLM_TASK_TABLE = "politopics-llm-tasks-local"

@@ -77,7 +77,7 @@ check_lambda() {
 }
 
 echo "[ensure-localstack] Checking DataCollection LocalStack resources at $LOCALSTACK_URL"
-check_bucket "politopics-prompts"
+check_bucket "politopics-llm-artifacts-local"
 check_bucket "politopics-data-collection-errors-local"
 check_bucket "politopics-data-collection-local-state"
 check_table "politopics-llm-tasks-local"
