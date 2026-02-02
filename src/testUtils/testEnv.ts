@@ -11,14 +11,11 @@ export const DEFAULT_LLM_TASK_TABLE = "politopics-llm-tasks-local"
 const BASE_CONFIG: AppConfig = {
   ...appConfig,
   aws: { ...appConfig.aws },
-  gemini: { ...appConfig.gemini },
   cache: { ...appConfig.cache },
 }
 
 const LAMBDA_ENV_DEFAULTS: EnvMap = {
   RUN_API_KEY: "secret",
-  GEMINI_MAX_INPUT_TOKEN: "1200",
-  GEMINI_API_KEY: "fake-key",
   PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
   NATIONAL_DIET_API_ENDPOINT: DEFAULT_ND_ENDPOINT,
   LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
@@ -33,19 +30,12 @@ const LOCALSTACK_ENV_DEFAULTS: EnvMap = {
 function applyOverrides(values: EnvMap): void {
   const next: Partial<AppConfig> = {}
   const aws: NonNullable<AppConfig["aws"]> = { ...appConfig.aws }
-  const gemini: NonNullable<AppConfig["gemini"]> = { ...appConfig.gemini }
 
   for (const [key, value] of Object.entries(values)) {
     if (!value) continue
     switch (key) {
       case "RUN_API_KEY":
         next.runApiKey = value
-        break
-      case "GEMINI_MAX_INPUT_TOKEN":
-        gemini.maxInputToken = Number(value)
-        break
-      case "GEMINI_API_KEY":
-        gemini.apiKey = value
         break
       case "PROMPT_BUCKET":
         next.promptBucket = value
@@ -82,7 +72,6 @@ function applyOverrides(values: EnvMap): void {
   }
 
   next.aws = aws
-  next.gemini = gemini
   updateAppConfig(next)
 }
 
@@ -90,7 +79,6 @@ export function resetTestConfig(): void {
   setAppConfig({
     ...BASE_CONFIG,
     aws: { ...BASE_CONFIG.aws },
-    gemini: { ...BASE_CONFIG.gemini },
     cache: { ...BASE_CONFIG.cache },
   })
 }

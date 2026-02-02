@@ -2,8 +2,6 @@
 // ensuring auth failures and empty-meeting responses behave correctly without touching LocalStack.
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
-import { installMockGeminiCountTokens } from './testUtils/mockApis';
-
 const createTaskMock = jest.fn();
 
 jest.doMock('@DynamoDB/tasks', () => ({
@@ -109,8 +107,6 @@ describe('lambda_handler run endpoint', () => {
         meetingRecord: [],
       }),
     } as Response);
-
-    installMockGeminiCountTokens(10);
 
     await jest.isolateModulesAsync(async () => {
       const { applyLambdaTestEnv, DEFAULT_PROMPT_BUCKET } = await import('./testUtils/testEnv');

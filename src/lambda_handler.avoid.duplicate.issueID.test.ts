@@ -15,7 +15,6 @@ import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from '@
 
 import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
 
-import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
 
@@ -85,7 +84,6 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
 
       applyLambdaTestEnv({
         NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
-        GEMINI_MAX_INPUT_TOKEN: '200',
         PROMPT_BUCKET: bucketName,
         LLM_TASK_TABLE: tableName,
       });
@@ -145,14 +143,12 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
         const createdAt = new Date().toISOString();
         const seededTask = {
           pk: issueID,
-          status: 'pending',
-          llm: 'gemini',
-          llmModel: 'gemini-2.5-pro',
+          status: 'ingested',
           retryAttempts: 0,
           createdAt,
           updatedAt: createdAt,
-          processingMode: 'single_chunk' as const,
-          prompt_url: `s3://${bucketName}/prompts/${issueID}_reduce.json`,
+          raw_url: `s3://${bucketName}/raw/${issueID}.json`,
+          raw_hash: 'seed',
           meeting: {
             issueID,
             nameOfMeeting: 'Budget Committee',
@@ -161,8 +157,9 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
             numberOfSpeeches: 2,
             session: 208,
           },
-          result_url: `s3://${bucketName}/results/${issueID}_reduce.json`,
-          chunks: [],
+          attachedAssets: {
+            speakerMetadataUrl: `s3://${bucketName}/attachedAssets/${issueID}.json`,
+          },
         };
         await docClient.send(new PutCommand({ TableName: tableName, Item: seededTask }));
         insertedTasks.push(issueID);
@@ -193,8 +190,6 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
           statusText: 'OK',
           json: async () => dietResponse,
         } as Response);
-
-        installMockGeminiCountTokens(10);
 
         const event: APIGatewayProxyEventV2 = {
           version: '2.0',
@@ -231,7 +226,6 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
           const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
           applyLambdaTestEnv({
             NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
-            GEMINI_MAX_INPUT_TOKEN: '200',
             PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
             LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
           });
@@ -244,7 +238,7 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
         const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
         expect(stored.Item?.createdAt).toBe(createdAt);
         const updatedAt = new Date(stored.Item?.updatedAt as string).getTime();
-        expect(stored.Item?.status).toBe('pending');
+        expect(stored.Item?.status).toBe('ingested');
 
         fetchMock.mockRestore();
       },

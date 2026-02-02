@@ -10,7 +10,6 @@
     '^@llm/(.*)$': '<rootDir>/src/llm/$1',
     '^@services/(.*)$': '<rootDir>/src/services/$1',
     '^@interfaces/(.*)$': '<rootDir>/src/interfaces/$1',
-    '^@prompts/(.*)$': '<rootDir>/src/prompts/$1',
     '^@S3/(.*)$': '<rootDir>/src/S3/$1',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
   },

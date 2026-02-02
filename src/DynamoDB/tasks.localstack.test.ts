@@ -10,64 +10,73 @@ import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
-import { PROMPT_VERSION } from '../prompts/prompts';
-
 /*
- * creates tasks with chunk metadata and lists pending items
- * [Contract] TaskRepository must persist chunked tasks with chunk arrays and return them via StatusIndex queries.
- * [Reason] Worker polling depends on StatusIndex to find pending work.
- * [Accident] Without this, workers could miss tasks or see incomplete chunk metadata.
- * [Odd] chunkCount=2 forces non-trivial chunk arrays.
+ * creates ingested tasks and reads them back
+ * [Contract] TaskRepository must persist ingested tasks with raw_url metadata.
+ * [Reason] Recap depends on ingested tasks as the discovery queue.
+ * [Accident] Without this, ingestion could silently drop work.
+ * [Odd] Minimal meeting metadata to keep payload tiny.
  * [History] None; preventive.
- *
- * markChunkReady updates chunk status
- * [Contract] markChunkReady must flip a chunk to ready without changing task status.
- * [Reason] Reduce scheduling depends on per-chunk readiness.
- * [Accident] Without this, reduce prompts would never be scheduled.
- * [Odd] chunkCount=1 minimal payload to hit the path.
- * [History] None.
  *
  * markTaskSucceeded updates status
  * [Contract] markTaskSucceeded must promote pending tasks to completed.
- * [Reason] Downstream recap pipeline reads completion to avoid duplicates.
+ * [Reason] Recap pipeline reads completion to avoid duplicates.
  * [Accident] Without this, tasks would remain pending and be retried or duplicated.
- * [Odd] chunkCount=0 covers single_chunk/direct path.
+ * [Odd] pending task with minimal fields.
  * [History] None.
  */
 
 const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 
-const createIssueTask = (args: { issueID: string; chunkCount: number }): IssueTask => {
+const createIngestedTask = (issueID: string): IssueTask => {
   const createdAt = new Date().toISOString();
   return {
-    pk: args.issueID,
+    pk: issueID,
+    status: 'ingested',
+    retryAttempts: 0,
+    createdAt,
+    updatedAt: createdAt,
+    raw_url: `s3://${DEFAULT_PROMPT_BUCKET}/raw/${issueID}.json`,
+    raw_hash: 'seed',
+    meeting: {
+      issueID,
+      nameOfMeeting: 'Test Meeting',
+      nameOfHouse: 'House',
+      date: '2025-11-30',
+      numberOfSpeeches: 1,
+      session: 208,
+    },
+    attachedAssets: {
+      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${issueID}.json`,
+    },
+  };
+};
+
+const createPendingTask = (issueID: string): IssueTask => {
+  const createdAt = new Date().toISOString();
+  return {
+    pk: issueID,
     status: 'pending',
     llm: 'gemini',
     llmModel: 'gemini-2.5-pro',
     retryAttempts: 0,
     createdAt,
     updatedAt: createdAt,
-    processingMode: args.chunkCount ? 'chunked' : 'single_chunk',
-    prompt_version: PROMPT_VERSION,
-    prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${args.issueID}_reduce.json`,
+    processingMode: 'single_chunk',
+    prompt_version: '1.0',
+    prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${issueID}_reduce.json`,
     meeting: {
-      issueID: args.issueID,
+      issueID,
       nameOfMeeting: 'Test Meeting',
       nameOfHouse: 'House',
       date: '2025-11-30',
-      numberOfSpeeches: args.chunkCount || 1,
+      numberOfSpeeches: 1,
       session: 208,
     },
-    result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${args.issueID}_reduce.json`,
-    chunks: Array.from({ length: args.chunkCount }, (_, idx) => ({
-      id: `CHUNK#${idx}`,
-      prompt_key: `prompts/${args.issueID}_${idx}.json`,
-      prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${args.issueID}_${idx}.json`,
-      result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${args.issueID}_${idx}.json`,
-      status: 'notReady' as const,
-    })),
+    result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${issueID}_reduce.json`,
+    chunks: [],
     attachedAssets: {
-      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${args.issueID}.json`,
+      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${issueID}.json`,
     },
   };
 };
@@ -128,33 +137,13 @@ describe('TaskRepository LocalStack integration', () => {
      Odd values: chunkCount=2 forces multi-chunk payloads rather than single-chunk shortcuts.
      Bug history: none specific; preventive coverage.
     */
-    test('creates tasks with chunk metadata and lists pending items', async () => {
-      const issueID = `TEST-ISSUE-${Date.now()}`;
-      await repository.createTask(createIssueTask({ issueID, chunkCount: 2 }));
-
-      const pending = await repository.getNextPending(5);
-      expect(pending.every((task) => task.status === "pending")).toBe(true);
+    test('creates ingested tasks and reads them back', async () => {
+      const issueID = `TEST-INGEST-${Date.now()}`;
+      await repository.createTask(createIngestedTask(issueID));
 
       const stored = await waitForTask(issueID);
-      expect(stored?.chunks.length).toBe(2);
-      expect(stored?.chunks.every((chunk) => chunk.status === 'notReady')).toBe(true);
-    }, 20000);
-
-    /*
-     Contract: validates markChunkReady flips a chunk to ready without altering task status; broken means downstream reducers never see chunk completion.
-     Reason: chunk readiness drives reduce prompts; this guards the per-chunk update path.
-     Accident without this: chunks could remain notReady and block reduce steps, silently delaying runs.
-     Odd values: chunkCount=1 hits minimal payload but still exercises status flip logic.
-     Bug history: none known.
-    */
-    test('markChunkReady updates chunk status', async () => {
-      const issueID = `TEST-CHUNK-${Date.now()}`;
-      await repository.createTask(createIssueTask({ issueID, chunkCount: 1 }));
-
-      await repository.markChunkReady(issueID, 'CHUNK#0');
-      const updated = await repository.getTask(issueID);
-      expect(updated?.chunks[0].status).toBe('ready');
-      expect(updated?.status).toBe('pending');
+      expect(stored?.status).toBe('ingested');
+      expect(typeof stored?.raw_url).toBe('string');
     }, 20000);
 
     /*
@@ -166,7 +155,7 @@ describe('TaskRepository LocalStack integration', () => {
     */
     test('markTaskSucceeded updates status', async () => {
       const issueID = `TEST-SUCCEED-${Date.now()}`;
-      await repository.createTask(createIssueTask({ issueID, chunkCount: 0 }));
+      await repository.createTask(createPendingTask(issueID));
 
       const result = await repository.markTaskSucceeded(issueID);
       expect(result?.status).toBe('completed');

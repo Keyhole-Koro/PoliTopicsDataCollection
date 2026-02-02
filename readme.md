@@ -1,7 +1,7 @@
 # PoliTopics Data Collection
 [日本語版](./jp/readme.md)
 
-Serverless ingestion for the National Diet: fetch records, split them into prompt chunks, store prompts in S3, and register LLM tasks in DynamoDB. Built with TypeScript on AWS Lambda, provisioned by Terraform, and runnable on LocalStack.
+Serverless ingestion for the National Diet: fetch records, store raw payloads in S3, and register ingested tasks in DynamoDB. Built with TypeScript on AWS Lambda, provisioned by Terraform, and runnable on LocalStack.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ flowchart LR
   subgraph DC[PoliTopicsDataCollection / Ingestion Service]
     IngestSchedule["EventBridge (Cron)<br/>IngestSchedule"]
     IngestLambda["AWS Lambda (Node.js)<br/>IngestLambda"]
-    PromptBucket[(Amazon S3<br/>PromptBucket)]
+    PromptBucket[(Amazon S3<br/>RawPayloadBucket)]
     TaskTable[(DynamoDB<br/>TaskTable: llm_task_table)]
   end
 
@@ -19,13 +19,13 @@ flowchart LR
 
   IngestSchedule -->|Triggers| IngestLambda
   IngestLambda -->|Fetches Data| NationalDietAPI
-  IngestLambda -->|Stores Raw Text| PromptBucket
-  IngestLambda -->|Enqueues Task| TaskTable
+  IngestLambda -->|Stores Raw Payload| PromptBucket
+  IngestLambda -->|Enqueues Ingested Task| TaskTable
 ```
 
 Notes
 - Scheduler queries from 21 days ago to today because the Diet API publishes with a short lag after meetings.
-- Prompts live in S3; task metadata in DynamoDB; Discord webhooks for error/warn/batch.
+- Raw payloads live in S3; task metadata in DynamoDB; Discord webhooks for error/warn/batch.
 - Local-first via LocalStack; same Lambda bundle deploys to stage/prod.
 
 ## Commands
@@ -37,10 +37,9 @@ Notes
 
 ## Environment
 - `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
-- `GEMINI_API_KEY`
 - `RUN_API_KEY`
 - `LLM_TASK_TABLE`
-- `PROMPT_BUCKET` (S3 for prompts)
+- `PROMPT_BUCKET` (S3 for raw payloads + attached assets)
 - `ERROR_BUCKET` (optional run logs)
 - `DISCORD_WEBHOOK_ERROR`, `DISCORD_WEBHOOK_WARN`, `DISCORD_WEBHOOK_BATCH`
 - AWS: `AWS_REGION` (default `ap-northeast-3`), `AWS_ENDPOINT_URL` for LocalStack

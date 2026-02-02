@@ -155,3 +155,35 @@ Files:
 - Files changed:
   - `PoliTopicsDataCollection/src/DynamoDB/tasks.ts`
   - `PoliTopicsDataCollection/src/DynamoDB/tasks.localstack.test.ts`
+
+Agent: Codex
+Date/Time: 2026-01-29 16:05 JST
+Keywords: prompts, orders, schema
+Topic: Add order jump directive to summaries
+Details:
+- Updated prompt instructions/output examples to include `[[orders:...]]` jump tags in summaries and bumped the prompt version.
+Files:
+- PoliTopicsDataCollection/src/prompts/prompts.ts
+
+Agent: Codex
+Date/Time: 2026-02-01 13:23:23 JST
+Keywords: gemini, scripts, prompts, docs
+Topic: Add Gemini mock generation script for DataCollection prompts
+Details:
+- Added a CLI script that builds DataCollection prompts with a mock meeting input and calls Gemini for generation.
+- Documented the smoke-test command and flags in the EN/JP READMEs.
+Files:
+- PoliTopicsDataCollection/src/scripts/gemini-generate-mock.ts
+- PoliTopicsDataCollection/readme.md
+- PoliTopicsDataCollection/jp/readme.md
+
+### Changes After Review
+- Extended the script to download National Diet API payloads (with /tmp/nd.json cache) and build prompt input from the selected meeting.
+- Added CLI flags for ND API range, meeting index, cache refresh, and mock fallback; updated READMEs accordingly.
+Files:
+- PoliTopicsDataCollection/src/scripts/gemini-generate-mock.ts
+- PoliTopicsDataCollection/readme.md
+- PoliTopicsDataCollection/jp/readme.md
+- Refresh /tmp/nd.json automatically when fetch parameters change by tracking cached range metadata.
+Files:
+- PoliTopicsDataCollection/src/scripts/gemini-generate-mock.ts

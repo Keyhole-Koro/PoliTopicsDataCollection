@@ -1,39 +1,36 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { Handler, ScheduledEvent } from 'aws-lambda';
 
+import { createHash } from 'node:crypto';
+
 import { S3Client } from '@aws-sdk/client-s3';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
+import { putJsonS3 } from '@S3/s3';
 
-import { chunk_prompt, reduce_prompt, single_chunk_prompt, PROMPT_VERSION } from '@prompts/prompts';
 import { appConfig } from './config';
 
 import { resJson, isApiResponse } from './lambda/httpResponses';
 import { fetchMeetingsForRange } from './lambda/meetings';
 import { resolveRunRange } from './lambda/rangeResolver';
-import { buildTasksForMeeting } from './lambda/taskBuilder';
-import { TaskRepository } from '@DynamoDB/tasks';
+import { TaskRepository, type AttachedAssets, type IssueTask } from '@DynamoDB/tasks';
 import {
   notifyRunError,
   notifyTaskWriteFailure,
   notifyTasksCreated,
 } from './lambda/notifications';
 
-const PROMPT_BUCKET = appConfig.promptBucket;
-const RUN_ID_PLACEHOLDER = '';
+const RAW_BUCKET = appConfig.promptBucket;
 const s3 = new S3Client(appConfig.aws);
 const taskRepo = new TaskRepository();
 
 const nationalDietApiEndpoint = appConfig.nationalDietApiEndpoint;
 
-const geminiMaxInputToken: number = appConfig.gemini.maxInputToken;
-const genAI = new GoogleGenerativeAI(appConfig.gemini.apiKey);
-const model = genAI.getGenerativeModel({ model: appConfig.gemini.model });
-
-async function countTokens(text: string): Promise<number> {
-  const response = await model.countTokens({ contents: [{ role: 'user', parts: [{ text }] }] });
-  return response.totalTokens;
-}
+type RawMeetingPayload = {
+  meeting: Record<string, unknown>;
+  ingestedAt: string;
+  source: 'kokkai.ndl';
+};
 
 export const handler: Handler = async (event: APIGatewayProxyEventV2 | ScheduledEvent) => {
   const rangeOrResponse = resolveRunRange(event);
@@ -62,17 +59,6 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
     }
 
     summary.meetingsProcessed = meetings.length;
-    const chunkPromptTemplate = chunk_prompt('');
-    const reducePromptTemplate = reduce_prompt('');
-    const singleChunkPromptTemplate = single_chunk_prompt('');
-    const promptTokenCost = await countTokens(chunkPromptTemplate);
-    const availableTokens = geminiMaxInputToken - promptTokenCost;
-
-    if (availableTokens <= 0) {
-      console.error('Chunk prompt exceeds available token budget; aborting run.');
-      await notifyRunError('Chunk prompt exceeds available token budget', { range });
-      return resJson(500, { error: 'prompt_over_budget' });
-    }
 
     for (const meeting of meetings) {
       const meetingIssueID = meeting.issueID?.trim();
@@ -86,6 +72,11 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         continue;
       }
 
+      if (!meeting.speechRecord?.length) {
+        console.log(`[Meeting ${meetingIssueID}] No speeches available; skipping.`);
+        continue;
+      }
+
       const existingTask = await taskRepo.getTask(meetingIssueID);
       if (existingTask) {
         console.log(`[Meeting ${meetingIssueID}] Task already exists in DynamoDB; skipping creation.`);
@@ -93,29 +84,45 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         continue;
       }
 
-      const issueTask = await buildTasksForMeeting({
-        meeting,
-        chunkPromptTemplate,
-        reducePromptTemplate,
-        singleChunkPromptTemplate,
-        promptVersion: PROMPT_VERSION,
-        availableTokens,
-        range,
-        bucket: PROMPT_BUCKET,
-        geminiModel: appConfig.gemini.model,
+      const createdAt = isoTimestamp();
+      const updatedAt = createdAt;
+      const meetingInfo = {
+        issueID: meetingIssueID,
+        nameOfMeeting: meeting.nameOfMeeting.trim(),
+        nameOfHouse: meeting.nameOfHouse.trim(),
+        date: meeting.date.trim(),
+        numberOfSpeeches: meeting.speechRecord.length,
+        session: meeting.session,
+      };
+
+      const rawPayload = buildRawPayload(meeting, createdAt);
+      const rawKey = `raw/${meetingIssueID}.json`;
+      await putJsonS3({ s3, bucket: RAW_BUCKET, key: rawKey, body: rawPayload });
+      const rawHash = hashPayload(rawPayload);
+
+      const attachedAssets = await writeAttachedAssets({
         s3,
-        runId: RUN_ID_PLACEHOLDER,
-        countTokens,
+        bucket: RAW_BUCKET,
+        issueID: meetingIssueID,
+        speeches: meeting.speechRecord,
+        createdAt,
       });
 
-      if (!issueTask) {
-        console.log(`[DataCollection] Skipped task creation for ${meetingIssueID} (filtered or empty)`);
-        continue;
-      }
+      const issueTask: IssueTask = {
+        pk: meetingIssueID,
+        status: 'ingested',
+        retryAttempts: 0,
+        createdAt,
+        updatedAt,
+        raw_url: `s3://${RAW_BUCKET}/${rawKey}`,
+        raw_hash: rawHash,
+        meeting: meetingInfo,
+        attachedAssets,
+      };
 
       try {
         await taskRepo.createTask(issueTask);
-        console.log(`[DataCollection] Created task for ${meetingIssueID}: mode=${issueTask.processingMode}, chunks=${issueTask.chunks.length}`);
+        console.log(`[DataCollection] Ingested raw payload for ${meetingIssueID}`);
         summary.createdCount += 1;
         summary.issueIds.push(meetingIssueID);
       } catch (error: any) {
@@ -140,3 +147,86 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
     return resJson(500, { error: 'internal_error', message: (error as Error).message || error });
   }
 };
+
+type SpeakerAttachment = {
+  order: number;
+  speechId?: string;
+  speaker?: string;
+  speakerYomi?: string | null;
+  speakerGroup?: string | null;
+  speakerPosition?: string | null;
+  originalText?: string;
+};
+
+type AttachedAssetsPayload = {
+  issueID: string;
+  generatedAt: string;
+  speeches: SpeakerAttachment[];
+};
+
+function isoTimestamp(): string {
+  return new Date().toISOString();
+}
+
+function hashPayload(payload: RawMeetingPayload): string {
+  const raw = JSON.stringify(payload);
+  return createHash('sha256').update(raw).digest('hex');
+}
+
+function buildRawPayload(meeting: Record<string, unknown>, createdAt: string): RawMeetingPayload {
+  return {
+    meeting,
+    ingestedAt: createdAt,
+    source: 'kokkai.ndl',
+  };
+}
+
+function buildSpeakerAttachments(speeches: RawSpeechRecord[]): SpeakerAttachment[] {
+  return speeches
+    .map((speech): SpeakerAttachment | null => {
+      const order = Number(speech.speechOrder);
+      if (!Number.isFinite(order)) return null;
+      const originalText = typeof speech.speech === 'string' ? speech.speech.trim() : '';
+      const speaker = typeof speech.speaker === 'string' ? speech.speaker.trim() : '';
+
+      return {
+        order,
+        speechId: typeof speech.speechID === 'string' ? speech.speechID : undefined,
+        speaker: speaker || undefined,
+        speakerYomi: 'speakerYomi' in speech ? speech.speakerYomi ?? null : undefined,
+        speakerGroup: 'speakerGroup' in speech ? speech.speakerGroup ?? null : undefined,
+        speakerPosition: 'speakerPosition' in speech ? speech.speakerPosition ?? null : undefined,
+        originalText: originalText || undefined,
+      };
+    })
+    .filter((meta): meta is SpeakerAttachment => Boolean(meta));
+}
+
+async function writeAttachedAssets(args: {
+  s3: S3Client;
+  bucket: string;
+  issueID: string;
+  speeches: RawSpeechRecord[];
+  createdAt: string;
+}): Promise<AttachedAssets> {
+  const { s3, bucket, issueID, speeches, createdAt } = args;
+  const payload: AttachedAssetsPayload = {
+    issueID,
+    generatedAt: createdAt,
+    speeches: buildSpeakerAttachments(speeches),
+  };
+
+  const key = `attachedAssets/${issueID}.json`;
+  try {
+    await putJsonS3({
+      s3,
+      bucket,
+      key,
+      body: payload,
+    });
+    return { speakerMetadataUrl: `s3://${bucket}/${key}` };
+  } catch (error) {
+    console.error(`[Meeting ${issueID}] Failed to write attached assets to S3`, { error });
+    throw error;
+  }
+}

@@ -1,7 +1,7 @@
 # PoliTopics Data Collection
 [English Version](../readme.md)
 
-国会会議録を取得し、プロンプトに分割して S3 に保存し、LLM タスクを DynamoDB に登録するサーバーレスの収集サービスです。TypeScript + AWS Lambda で動作し、Terraform と LocalStack でローカルから本番まで同じフローを使えます。
+国会会議録を取得し、raw payload を S3 に保存し、ingested タスクを DynamoDB に登録するサーバーレスの収集サービスです。TypeScript + AWS Lambda で動作し、Terraform と LocalStack でローカルから本番まで同じフローを使えます。
 
 ## アーキテクチャ
 
@@ -11,7 +11,7 @@ flowchart LR
   subgraph DC[PoliTopicsDataCollection / 収集サービス]
     IngestSchedule["EventBridge (Cron)<br/>取得スケジュール"]
     IngestLambda["AWS Lambda (Node.js)<br/>IngestLambda"]
-    PromptBucket[(Amazon S3<br/>PromptBucket)]
+    PromptBucket[(Amazon S3<br/>RawPayloadBucket)]
     TaskTable[(DynamoDB<br/>TaskTable: llm_task_table)]
   end
 
@@ -19,13 +19,13 @@ flowchart LR
 
   IngestSchedule -->|トリガー| IngestLambda
   IngestLambda -->|会議録を取得| NationalDietAPI
-  IngestLambda -->|元テキストを保存| PromptBucket
-  IngestLambda -->|タスクを登録| TaskTable
+  IngestLambda -->|raw payload を保存| PromptBucket
+  IngestLambda -->|ingested タスクを登録| TaskTable
 ```
 
 メモ
 - スケジューラは会議後に API 反映が遅れるため、21日前から当日までをクエリ。
-- プロンプトは S3、タスクは DynamoDB、通知は Discord Webhook。
+- raw payload は S3、タスクは DynamoDB、通知は Discord Webhook。
 - LocalStack でローカル動作、本番/ステージは同じ Lambda バンドルをデプロイ。
 
 ## コマンド
@@ -37,10 +37,9 @@ flowchart LR
 
 ## 環境変数
 - `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
-- `GEMINI_API_KEY`
 - `RUN_API_KEY`
 - `LLM_TASK_TABLE`
-- `PROMPT_BUCKET` (プロンプト格納 S3)
+- `PROMPT_BUCKET` (raw payload + attached assets を保存する S3)
 - `ERROR_BUCKET` (任意の実行ログ)
 - `DISCORD_WEBHOOK_ERROR`, `DISCORD_WEBHOOK_WARN`, `DISCORD_WEBHOOK_BATCH`
 - AWS: `AWS_REGION` (デフォルト `ap-northeast-3`), LocalStack 用の `AWS_ENDPOINT_URL`

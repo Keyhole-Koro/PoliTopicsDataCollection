@@ -14,7 +14,7 @@ const DEFAULT_TABLE_NAME = appConfig.llmTaskTable;
 
 const nowIso = (): string => new Date().toISOString();
 
-export type TaskStatus = 'pending' | 'completed';
+export type TaskStatus = 'ingested' | 'pending' | 'remake' | 'completed';
 export type ChunkStatus = 'notReady' | 'ready';
 export type ReduceProcessingMode = 'single_chunk' | 'chunked';
 
@@ -42,17 +42,19 @@ export type AttachedAssets = {
 export type IssueTask = {
   pk: string; // issueID
   status: TaskStatus;
-  llm: string;
-  llmModel: string;
-  retryAttempts: number;
+  llm?: string;
+  llmModel?: string;
+  retryAttempts?: number;
   createdAt: string;
   updatedAt: string;
-  processingMode: ReduceProcessingMode;
-  prompt_version: string;
-  prompt_url: string;
+  processingMode?: ReduceProcessingMode;
+  prompt_version?: string;
+  prompt_url?: string;
+  raw_url?: string;
+  raw_hash?: string;
   meeting: Meeting;
-  result_url: string;
-  chunks: ChunkItem[];
+  result_url?: string;
+  chunks?: ChunkItem[];
   attachedAssets: AttachedAssets;
 };
 

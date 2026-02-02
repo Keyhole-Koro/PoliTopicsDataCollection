@@ -100,10 +100,12 @@ export async function notifyTasksCreated(summary: TaskCreationSummary): Promise<
 }
 
 export async function notifyTaskWriteFailure(task: IssueTask, error: unknown): Promise<void> {
+  const llmValue = [task.llm, task.llmModel].filter(Boolean).join("/") || "n/a";
+  const modeValue = task.processingMode ?? "n/a";
   const fields: DiscordField[] = [
     { name: "Task ID", value: task.pk, inline: true },
-    { name: "LLM", value: `${task.llm}/${task.llmModel}`, inline: true },
-    { name: "Mode", value: task.processingMode, inline: true },
+    { name: "LLM", value: llmValue, inline: true },
+    { name: "Mode", value: String(modeValue), inline: true },
     { name: "Meeting", value: task.meeting?.nameOfMeeting ?? "unknown" },
     { name: "Error", value: formatError(error) },
   ];

@@ -1,9 +1,8 @@
 // End-to-end-ish suite: mocks the National Diet API but drives the real Lambda handler against
-// LocalStack S3 + DynamoDB to verify prompt generation, chunk creation, and task writes.
+// LocalStack S3 + DynamoDB to verify raw payload ingestion and task writes.
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 import type { RawMeetingData, RawSpeechRecord } from '@NationalDietAPI/Raw';
-import { PROMPT_VERSION } from '@prompts/prompts';
 
 import {
   CreateTableCommand,
@@ -17,29 +16,29 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import {
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   S3Client,
   type BucketLocationConstraint,
 } from '@aws-sdk/client-s3';
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
-import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
 
 /*
- * processes a small meeting and stores a direct task in LocalStack
- * [Contract] Small meetings must create a single_chunk task with prompt and Dynamo entry and return 200.
- * [Reason] Tiny payloads bypass chunking but still need tasks persisted.
- * [Accident] Without this, small meetings could be dropped silently and never summarized.
- * [Odd] Two speeches with GEMINI_MAX_INPUT_TOKEN=120 forces single_chunk; pre-clears existing pk.
+ * processes a small meeting and stores an ingested task in LocalStack
+ * [Contract] Meetings must create an ingested task with raw payload and Dynamo entry and return 200.
+ * [Reason] Ingestion must persist raw payloads so Recap can build prompts later.
+ * [Accident] Without this, meetings could be dropped silently and never summarized.
+ * [Odd] Two speeches to keep the payload tiny; pre-clears existing pk.
  * [History] None recorded; guardrail.
  *
- * processes mocked meetings and persists chunked tasks to LocalStack
- * [Contract] Larger mocked meetings must trigger chunking and persist chunked tasks/prompts in LocalStack.
- * [Reason] Chunk flow is the dominant path; ensures chunk marshalling works.
- * [Accident] Without this, chunk creation could break and leave empty tasks.
- * [Odd] Six speeches with GEMINI_MAX_INPUT_TOKEN=35 forces chunking; expects chunk statuses notReady/ready.
+ * processes mocked meetings and persists ingested tasks to LocalStack
+ * [Contract] Larger mocked meetings must persist raw payloads and ingested tasks in LocalStack.
+ * [Reason] Ingestion must scale regardless of meeting size.
+ * [Accident] Without this, large meetings could fail ingestion and never reach Recap.
+ * [Odd] Six speeches to emulate a larger payload.
  * [History] None; preventive.
  */
 
@@ -210,14 +209,25 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
       }
     }
 
+    async function readObjectText(bucket: string, key: string): Promise<string> {
+      const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const body = response.Body;
+      if (!body) throw new Error(`Missing body for s3://${bucket}/${key}`);
+      const chunks: Buffer[] = [];
+      for await (const chunk of body as any) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks).toString('utf8');
+    }
+
     /*
-     Contract: for small meetings the handler must create a single-chunk task and persist it; failure means single_chunk path broke.
-     Reason: small payloads bypass chunking and should still generate a task and S3 prompt.
-     Accident without this: tiny meetings could be dropped silently, reducing coverage.
-     Odd values: tiny speech set forces single_chunk branch explicitly.
+     Contract: for small meetings the handler must ingest raw payloads and create task records.
+     Reason: ingestion-only flow should not drop small meetings.
+     Accident without this: tiny meetings could be skipped silently, reducing coverage.
+     Odd values: tiny speech set keeps the payload small.
      Bug history: none recorded.
     */
-    test('processes a small meeting and stores a direct task in LocalStack', async () => {
+    test('processes a small meeting and stores an ingested task in LocalStack', async () => {
       const issueID = `MTG-LOCAL-DIRECT-${Date.now()}`;
       const dietResponse: RawMeetingData = {
         numberOfRecords: 1,
@@ -245,8 +255,6 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         statusText: 'OK',
         json: async () => dietResponse,
       } as Response));
-
-      installMockGeminiCountTokens(10);
 
       await deleteTaskIfExists(issueID);
 
@@ -285,7 +293,6 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
         applyLambdaTestEnv({
           NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
-          GEMINI_MAX_INPUT_TOKEN: '120',
           PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
           LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
         });
@@ -298,23 +305,28 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
       insertedTasks.push(issueID);
       const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
       expect(stored.Item).toBeDefined();
-      expect(stored.Item?.processingMode).toBe('single_chunk');
-      expect(Array.isArray(stored.Item?.chunks)).toBe(true);
-      expect(stored.Item?.chunks?.length ?? 0).toBe(0);
-      expect(typeof stored.Item?.prompt_url).toBe('string');
-      expect(stored.Item?.prompt_version).toBe(PROMPT_VERSION);
+      expect(stored.Item?.status).toBe('ingested');
+      expect(typeof stored.Item?.raw_url).toBe('string');
+      expect(stored.Item?.prompt_url).toBeUndefined();
+
+      const rawUrl = stored.Item?.raw_url as string;
+      const [, rawBucket, rawKey] = rawUrl.match(/^s3:\/\/([^/]+)\/(.+)$/) ?? [];
+      const rawText = await readObjectText(rawBucket, rawKey);
+      const rawPayload = JSON.parse(rawText);
+      expect(rawPayload?.meeting?.issueID).toBe(issueID);
+      expect(Array.isArray(rawPayload?.meeting?.speechRecord)).toBe(true);
 
       fetchMock.mockRestore();
     }, 60000);
 
     /*
-     Contract: ensures chunked meetings generate prompts and tasks across S3/DynamoDB; breakage means chunk flow or marshalling regressed.
-     Reason: chunked path is the common case; we mock ND API to hit chunk logic deterministically.
-     Accident without this: marshalling errors could leave S3/DynamoDB inconsistent and stall downstream reducers.
-     Odd values: mock meeting count drives multiple chunks to exercise reduce prompt assembly.
+     Contract: ensures multi-speech meetings are ingested with raw payloads and task records.
+     Reason: ingestion-only flow must persist raw payloads for Recap to chunk later.
+     Accident without this: raw payload writes or DynamoDB records could be missing, stalling Recap.
+     Odd values: mock meeting count ensures multi-speech payloads are handled.
      Bug history: none.
     */
-    test('processes mocked meetings and persists chunked tasks to LocalStack', async () => {
+    test('processes mocked meetings and persists ingested tasks to LocalStack', async () => {
       const issueID = `MTG-LOCAL-CHUNK-${Date.now()}`;
       const dietResponse: RawMeetingData = {
         numberOfRecords: 1,
@@ -342,8 +354,6 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         statusText: 'OK',
         json: async () => dietResponse,
       } as Response));
-
-      installMockGeminiCountTokens(10);
 
       await deleteTaskIfExists(issueID);
 
@@ -382,7 +392,6 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         const { applyLambdaTestEnv, applyLocalstackEnv, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } = await import('./testUtils/testEnv');
         applyLambdaTestEnv({
           NATIONAL_DIET_API_ENDPOINT: 'https://mock.ndl.go.jp/api/meeting',
-          GEMINI_MAX_INPUT_TOKEN: '35',
           PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
           LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
         });
@@ -396,12 +405,16 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
       insertedTasks.push(issueID);
       const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
       expect(stored.Item).toBeDefined();
-      expect(stored.Item?.processingMode).toBe('single_chunk');
-      expect(Array.isArray(stored.Item?.chunks)).toBe(true);
-      expect(stored.Item?.chunks?.length).toBe(0);
-      expect(stored.Item?.chunks?.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')).toBe(true);
-      expect(typeof stored.Item?.prompt_url).toBe('string');
-      expect(stored.Item?.prompt_version).toBe(PROMPT_VERSION);
+      expect(stored.Item?.status).toBe('ingested');
+      expect(typeof stored.Item?.raw_url).toBe('string');
+      expect(stored.Item?.prompt_url).toBeUndefined();
+
+      const rawUrl = stored.Item?.raw_url as string;
+      const [, rawBucket, rawKey] = rawUrl.match(/^s3:\/\/([^/]+)\/(.+)$/) ?? [];
+      const rawText = await readObjectText(rawBucket, rawKey);
+      const rawPayload = JSON.parse(rawText);
+      expect(rawPayload?.meeting?.issueID).toBe(issueID);
+      expect(Array.isArray(rawPayload?.meeting?.speechRecord)).toBe(true);
 
       fetchMock.mockRestore();
     }, 60000);

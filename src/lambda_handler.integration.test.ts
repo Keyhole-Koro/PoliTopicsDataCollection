@@ -1,4 +1,4 @@
-// Full integration flow: fetches live ND API data, persists prompts + tasks to LocalStack, and
+// Full integration flow: fetches live ND API data, persists raw payloads + tasks to LocalStack, and
 // dumps artifacts for inspection to ensure end-to-end behavior works with real upstream data.
 import {
   DescribeTableCommand,
@@ -12,13 +12,12 @@ import path from 'node:path';
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
-import { installMockGeminiCountTokens } from './testUtils/mockApis';
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig, updateAppConfig } from './config';
 
 /*
  * fetches from the real API, caches the response, and stores DynamoDB tasks
- * [Contract] Lambda must call the live ND API, cache responses, and write prompt URLs/chunk metadata to LocalStack DynamoDB.
+ * [Contract] Lambda must call the live ND API, cache responses, and write raw payloads + ingested tasks to LocalStack DynamoDB.
  * [Reason] Validates real upstream contract beyond mocks and ensures cache wiring works.
  * [Accident] Without this, ND API schema drift could silently break ingestion.
  * [Odd] Fixed date range 2025-09-01..30 and runTimestamp filter isolate new tasks; depends on LocalStack + cache dir.
@@ -107,7 +106,6 @@ describe('lambda_handler integration using the real National Diet API with Local
 
       applyLambdaTestEnv({
         NATIONAL_DIET_API_ENDPOINT: 'https://kokkai.ndl.go.jp/api/meeting',
-        GEMINI_MAX_INPUT_TOKEN: '12000',
         PROMPT_BUCKET: bucketName,
         LLM_TASK_TABLE: tableName,
       });
@@ -151,7 +149,6 @@ describe('lambda_handler integration using the real National Diet API with Local
       'fetches from the real API, caches the response, and stores DynamoDB tasks',
       async () => {
         const fetchSpy = jest.spyOn(globalThis, 'fetch');
-        installMockGeminiCountTokens(10);
 
         const hadCacheAtStart = false;
         const runTimestamp = Date.now();
@@ -197,7 +194,6 @@ describe('lambda_handler integration using the real National Diet API with Local
           const { updateAppConfig } = await import('./config');
           applyLambdaTestEnv({
             NATIONAL_DIET_API_ENDPOINT: 'https://kokkai.ndl.go.jp/api/meeting',
-            GEMINI_MAX_INPUT_TOKEN: '12000',
             PROMPT_BUCKET: DEFAULT_PROMPT_BUCKET,
             LLM_TASK_TABLE: DEFAULT_LLM_TASK_TABLE,
           });
@@ -217,7 +213,12 @@ describe('lambda_handler integration using the real National Diet API with Local
           const tasksAfterFirst = await fetchAllTasks();
           const recentTasks = tasksAfterFirst.filter((task) => {
             const created = Date.parse(task.createdAt || '');
-            return Number.isFinite(created) && created >= runTimestamp;
+            const meetingDate = task.meeting?.date;
+            const inRange =
+              typeof meetingDate === 'string' &&
+              meetingDate >= from &&
+              meetingDate <= until;
+            return Number.isFinite(created) && created >= runTimestamp && inRange;
           });
 
           if (!recentTasks.length) {
@@ -232,23 +233,12 @@ describe('lambda_handler integration using the real National Diet API with Local
             return;
           }
 
-          expect(recentTasks.every((task) =>
-            typeof task.prompt_url === 'string' && task.prompt_url.startsWith('s3://')
-          )).toBe(true);
-
-          const chunkedTasks = recentTasks.filter((task) => task.processingMode === 'chunked');
-          const directTasks = recentTasks.filter((task) => task.processingMode === 'single_chunk');
-
-          if (chunkedTasks.length) {
-            expect(chunkedTasks.every((task) =>
-              Array.isArray(task.chunks) &&
-              task.chunks.length > 0 &&
-              task.chunks.every((chunk: any) => chunk.status === 'notReady' || chunk.status === 'ready')
-            )).toBe(true);
-          }
-          if (directTasks.length) {
-            expect(directTasks.every((task) => Array.isArray(task.chunks) && task.chunks.length === 0)).toBe(true);
-          }
+          const ingestedTasks = recentTasks.filter((task) =>
+            task.status === 'ingested' &&
+            typeof task.raw_url === 'string' &&
+            task.raw_url.startsWith('s3://')
+          );
+          expect(ingestedTasks.length).toBeGreaterThan(0);
 
           const fetchCallsAfterFirst = fetchSpy.mock.calls.length;
 

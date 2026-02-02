@@ -25,7 +25,6 @@
       "@llm/*": ["llm/*"],
       "@services/*": ["services/*"],
       "@S3/*": ["S3/*"],
-      "@prompts/*": ["prompts/*"],
       "@utils/*": ["utils/*"]
     },
   },

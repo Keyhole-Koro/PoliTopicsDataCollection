@@ -10,11 +10,6 @@ export type AppConfig = {
     forcePathStyle?: boolean
     credentials?: { accessKeyId: string; secretAccessKey: string }
   }
-  gemini: {
-    apiKey: string
-    maxInputToken: number
-    model: string
-  }
   promptBucket: string
   llmTaskTable: string
   nationalDietApiEndpoint: string
@@ -62,7 +57,6 @@ export function updateAppConfig(overrides: Partial<AppConfig>) {
     ...appConfig,
     ...overrides,
     aws: { ...appConfig.aws, ...overrides.aws },
-    gemini: { ...appConfig.gemini, ...overrides.gemini },
     cache: { ...appConfig.cache, ...overrides.cache },
   }
 }
@@ -84,11 +78,6 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
       forcePathStyle: true,
       credentials: { accessKeyId: "test", secretAccessKey: "test" },
     },
-    gemini: {
-      apiKey: requireEnv("GEMINI_API_KEY"),
-      maxInputToken: 4096,
-      model: "gemini-2.5-flash",
-    },
     promptBucket: "politopics-prompts",
     llmTaskTable: "politopics-llm-tasks-local",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
@@ -108,11 +97,6 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     aws: {
       region: "ap-northeast-3",
     },
-    gemini: {
-      apiKey: requireEnv("GEMINI_API_KEY"),
-      maxInputToken: 50000,
-      model: "gemini-2.5-flash",
-    },
     promptBucket: "politopics-data-collection-prompts-stage",
     llmTaskTable: "politopics-llm-tasks-stage",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
@@ -130,11 +114,6 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
   return {
     aws: {
       region: "ap-northeast-3",
-    },
-    gemini: {
-      apiKey: requireEnv("GEMINI_API_KEY"),
-      maxInputToken: 50000,
-      model: "gemini-2.5-flash",
     },
     promptBucket: "politopics-data-collection-prompts-prod",
     llmTaskTable: "politopics-llm-tasks-prod",
@@ -157,11 +136,6 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
       endpoint: process.env.AWS_ENDPOINT_URL || "http://localhost:4566",
       forcePathStyle: true,
       credentials: { accessKeyId: "test", secretAccessKey: "test" },
-    },
-    gemini: {
-      apiKey: optionalEnv("GEMINI_API_KEY"),
-      maxInputToken: 4096,
-      model: "gemini-2.5-flash",
     },
     promptBucket: "politopics-prompts",
     llmTaskTable: "politopics-llm-tasks-local",
