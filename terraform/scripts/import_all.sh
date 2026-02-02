@@ -3,7 +3,31 @@ set -euo pipefail
 
 TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TFVARS_DIR="$TF_DIR/tfvars"
-ENVIRONMENT_ARG="${1:-stage}"
+ENVIRONMENT_ARG=""
+FORCE_IMPORT="false"
+
+for arg in "$@"; do
+  case "$arg" in
+    --force)
+      FORCE_IMPORT="true"
+      ;;
+    local|ghaTest|stage|prod)
+      ENVIRONMENT_ARG="$arg"
+      ;;
+    *)
+      if [[ -z "$ENVIRONMENT_ARG" && -f "$arg" ]]; then
+        ENVIRONMENT_ARG="$arg"
+      else
+        echo "Usage: $(basename "$0") [local|ghaTest|stage|prod|<tfvars path>] [--force]" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "$ENVIRONMENT_ARG" ]]; then
+  ENVIRONMENT_ARG="stage"
+fi
 
 case "$ENVIRONMENT_ARG" in
   local)
@@ -22,7 +46,7 @@ case "$ENVIRONMENT_ARG" in
     if [[ -f "$ENVIRONMENT_ARG" ]]; then
       VAR_FILE="$ENVIRONMENT_ARG"
     else
-      echo "Usage: $(basename "$0") [local|ghaTest|stage|prod]" >&2
+      echo "Usage: $(basename "$0") [local|ghaTest|stage|prod|<tfvars path>] [--force]" >&2
       exit 1
     fi
     ;;
@@ -135,9 +159,16 @@ run_import() {
   (
     cd "$TF_DIR"
 
-    if terraform state show "$address" >/dev/null 2>&1; then
-      echo "skip   -> $address (already in state)"
-      return
+    if [[ "$FORCE_IMPORT" == "true" ]]; then
+      if terraform state show "$address" >/dev/null 2>&1; then
+        echo "force  -> rm $address (state)"
+        terraform state rm -no-color "$address" >/dev/null 2>&1 || true
+      fi
+    else
+      if terraform state show "$address" >/dev/null 2>&1; then
+        echo "skip   -> $address (already in state)"
+        return
+      fi
     fi
 
     echo "import -> $address :: $identifier"
