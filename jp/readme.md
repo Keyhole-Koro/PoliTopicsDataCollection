@@ -25,7 +25,7 @@ flowchart LR
 
 メモ
 - スケジューラは会議後に API 反映が遅れるため、21日前から当日までをクエリ。
-- cron/HTTP で range 指定された場合、7日単位に分割し `maximumRecords=10` を付けて国会議事録 API を叩き、呼び出し間隔は約15秒。
+- cron/HTTP で range 指定された場合、7日単位に分割し `maximumRecords=10` を付けて国会議事録 API を叩き、呼び出し間隔は約5秒。
 - raw payload は S3、タスクは DynamoDB、通知は Discord Webhook。
 - LocalStack でローカル動作、本番/ステージは同じ Lambda バンドルをデプロイ。
 

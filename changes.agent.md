@@ -225,3 +225,15 @@ Details:
 - Cooldown grows with split depth, while still respecting the base interval.
 Files changed:
 - `PoliTopicsDataCollection/src/lambda/meetings.ts`
+
+### Changes After Review
+- Reduced ND API request interval to 5 seconds and updated README notes.
+- Files changed:
+  - `PoliTopicsDataCollection/src/config.ts`
+  - `PoliTopicsDataCollection/readme.md`
+  - `PoliTopicsDataCollection/jp/readme.md`
+
+### Changes After Review
+- Fixed cooldown to a constant 5-second interval regardless of split depth.
+- Files changed:
+  - `PoliTopicsDataCollection/src/lambda/meetings.ts`

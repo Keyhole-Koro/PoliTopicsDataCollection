@@ -90,7 +90,7 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     nationalDietApi: {
       maxRecords: 10,
       rangeChunkDays: 7,
-      requestIntervalMs: 15000,
+      requestIntervalMs: 5000,
     },
     runApiKey: requireEnv("RUN_API_KEY"),
     localRunRange: { from: "2025-09-01", until: "2025-09-30" },
@@ -114,7 +114,7 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     nationalDietApi: {
       maxRecords: 10,
       rangeChunkDays: 7,
-      requestIntervalMs: 15000,
+      requestIntervalMs: 5000,
     },
     runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
@@ -137,7 +137,7 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     nationalDietApi: {
       maxRecords: 10,
       rangeChunkDays: 7,
-      requestIntervalMs: 15000,
+      requestIntervalMs: 5000,
     },
     runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},

@@ -64,20 +64,18 @@ export async function fetchMeetingsForRange(
   let recordCount = 0;
   let requestCount = 0;
 
-  const waitForCooldown = async (splitDepth: number): Promise<void> => {
+  const waitForCooldown = async (): Promise<void> => {
     if (requestCount === 0 || intervalMs <= 0) {
       requestCount += 1;
       return;
     }
-    const factor = Math.max(1, splitDepth + 1);
-    const delayMs = intervalMs * factor;
-    console.log(`[DataCollection] Waiting ${delayMs}ms before ND API request (splitDepth=${splitDepth})`);
-    await sleep(delayMs);
+    console.log(`[DataCollection] Waiting ${intervalMs}ms before ND API request`);
+    await sleep(intervalMs);
     requestCount += 1;
   };
 
   const fetchPage = async (segment: RunRange, splitDepth: number, startRecord?: number): Promise<RawMeetingData> => {
-    await waitForCooldown(splitDepth);
+    await waitForCooldown();
     return fetchNationalDietRecords(endpoint, {
       from: segment.from,
       until: segment.until,
