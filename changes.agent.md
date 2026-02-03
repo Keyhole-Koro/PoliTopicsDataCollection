@@ -187,3 +187,13 @@ Files:
 - Refresh /tmp/nd.json automatically when fetch parameters change by tracking cached range metadata.
 Files:
 - PoliTopicsDataCollection/src/scripts/gemini-generate-mock.ts
+
+Agent: Codex
+Date/Time: 2026-02-03 15:42 JST
+Keywords: task-id, uid, idempotency, tests
+Topic: Align LocalStack ingestion tests with hashed task IDs
+Details:
+- Updated LocalStack lambda tests to compute the internal task UID from session/house/issueID and assert stored tasks by that UID.
+Files changed:
+- `PoliTopicsDataCollection/src/lambda_handler.avoid.duplicate.issueID.test.ts`
+- `PoliTopicsDataCollection/src/lambda_handler.mock.test.ts`

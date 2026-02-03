@@ -40,7 +40,7 @@ export type AttachedAssets = {
 };
 
 export type IssueTask = {
-  pk: string; // issueID
+  pk: string; // internal task ID (hashed)
   status: TaskStatus;
   llm?: string;
   llmModel?: string;
@@ -96,16 +96,16 @@ export class TaskRepository {
     return (res.Items as IssueTask[]) || [];
   }
 
-  async getTask(issueID: string): Promise<IssueTask | undefined> {
+  async getTask(taskId: string): Promise<IssueTask | undefined> {
     const res = await this.docClient.send(new GetCommand({
       TableName: this.tableName,
-      Key: { pk: issueID },
+      Key: { pk: taskId },
     }));
     return res.Item as IssueTask | undefined;
   }
 
-  async markChunkReady(issueID: string, chunkId: string): Promise<IssueTask | undefined> {
-    const task = await this.getTask(issueID);
+  async markChunkReady(taskId: string, chunkId: string): Promise<IssueTask | undefined> {
+    const task = await this.getTask(taskId);
     if (!task?.chunks?.length) {
       return task;
     }
@@ -128,7 +128,7 @@ export class TaskRepository {
 
     const res = await this.docClient.send(new UpdateCommand({
       TableName: this.tableName,
-      Key: { pk: issueID },
+      Key: { pk: taskId },
       UpdateExpression: 'SET chunks = :chunks, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
         ':chunks': nextChunks,
@@ -139,10 +139,10 @@ export class TaskRepository {
     return res.Attributes as IssueTask | undefined;
   }
 
-  async markTaskSucceeded(issueID: string): Promise<IssueTask | undefined> {
+  async markTaskSucceeded(taskId: string): Promise<IssueTask | undefined> {
     const res = await this.docClient.send(new UpdateCommand({
       TableName: this.tableName,
-      Key: { pk: issueID },
+      Key: { pk: taskId },
       UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {

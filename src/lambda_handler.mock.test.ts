@@ -25,6 +25,7 @@ import { DeleteCommand, DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-
 
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
+import { buildIssueUid } from './utils/uid';
 
 /*
  * processes a small meeting and stores an ingested task in LocalStack
@@ -229,6 +230,11 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     */
     test('processes a small meeting and stores an ingested task in LocalStack', async () => {
       const issueID = `MTG-LOCAL-DIRECT-${Date.now()}`;
+      const taskId = buildIssueUid({
+        issueID,
+        session: 208,
+        nameOfHouse: 'House of Representatives',
+      });
       const dietResponse: RawMeetingData = {
         numberOfRecords: 1,
         numberOfReturn: 1,
@@ -256,7 +262,7 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         json: async () => dietResponse,
       } as Response));
 
-      await deleteTaskIfExists(issueID);
+      await deleteTaskIfExists(taskId);
 
       const event: APIGatewayProxyEventV2 = {
         version: '2.0',
@@ -302,14 +308,15 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         expect(response.statusCode).toBe(200);
       });
 
-      insertedTasks.push(issueID);
-      const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
+      insertedTasks.push(taskId);
+      const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: taskId } }));
       expect(stored.Item).toBeDefined();
       expect(stored.Item?.status).toBe('ingested');
       expect(typeof stored.Item?.raw_url).toBe('string');
       expect(stored.Item?.prompt_url).toBeUndefined();
 
       const rawUrl = stored.Item?.raw_url as string;
+      expect(rawUrl).toContain(taskId);
       const [, rawBucket, rawKey] = rawUrl.match(/^s3:\/\/([^/]+)\/(.+)$/) ?? [];
       const rawText = await readObjectText(rawBucket, rawKey);
       const rawPayload = JSON.parse(rawText);
@@ -328,6 +335,11 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
     */
     test('processes mocked meetings and persists ingested tasks to LocalStack', async () => {
       const issueID = `MTG-LOCAL-CHUNK-${Date.now()}`;
+      const taskId = buildIssueUid({
+        issueID,
+        session: 208,
+        nameOfHouse: 'House of Representatives',
+      });
       const dietResponse: RawMeetingData = {
         numberOfRecords: 1,
         numberOfReturn: 1,
@@ -355,7 +367,7 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         json: async () => dietResponse,
       } as Response));
 
-      await deleteTaskIfExists(issueID);
+      await deleteTaskIfExists(taskId);
 
       const event: APIGatewayProxyEventV2 = {
         version: '2.0',
@@ -402,14 +414,15 @@ describe('lambda_handler mocked ND API with LocalStack DynamoDB', () => {
         expect(response.statusCode).toBe(200);
       });
 
-      insertedTasks.push(issueID);
-      const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
+      insertedTasks.push(taskId);
+      const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: taskId } }));
       expect(stored.Item).toBeDefined();
       expect(stored.Item?.status).toBe('ingested');
       expect(typeof stored.Item?.raw_url).toBe('string');
       expect(stored.Item?.prompt_url).toBeUndefined();
 
       const rawUrl = stored.Item?.raw_url as string;
+      expect(rawUrl).toContain(taskId);
       const [, rawBucket, rawKey] = rawUrl.match(/^s3:\/\/([^/]+)\/(.+)$/) ?? [];
       const rawText = await readObjectText(rawBucket, rawKey);
       const rawPayload = JSON.parse(rawText);

@@ -10,6 +10,7 @@ import type { IssueTask } from './tasks';
 import { TaskRepository } from './tasks';
 import { applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET } from '../testUtils/testEnv';
 import { appConfig } from '../config';
+import { buildIssueUid } from '../utils/uid';
 /*
  * creates ingested tasks and reads them back
  * [Contract] TaskRepository must persist ingested tasks with raw_url metadata.
@@ -30,13 +31,18 @@ const { endpoint: LOCALSTACK_ENDPOINT } = getLocalstackConfig();
 
 const createIngestedTask = (issueID: string): IssueTask => {
   const createdAt = new Date().toISOString();
+  const taskId = buildIssueUid({
+    issueID,
+    session: 208,
+    nameOfHouse: 'House',
+  });
   return {
-    pk: issueID,
+    pk: taskId,
     status: 'ingested',
     retryAttempts: 0,
     createdAt,
     updatedAt: createdAt,
-    raw_url: `s3://${DEFAULT_PROMPT_BUCKET}/raw/${issueID}.json`,
+    raw_url: `s3://${DEFAULT_PROMPT_BUCKET}/raw/${taskId}.json`,
     raw_hash: 'seed',
     meeting: {
       issueID,
@@ -47,15 +53,20 @@ const createIngestedTask = (issueID: string): IssueTask => {
       session: 208,
     },
     attachedAssets: {
-      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${issueID}.json`,
+      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${taskId}.json`,
     },
   };
 };
 
 const createPendingTask = (issueID: string): IssueTask => {
   const createdAt = new Date().toISOString();
+  const taskId = buildIssueUid({
+    issueID,
+    session: 208,
+    nameOfHouse: 'House',
+  });
   return {
-    pk: issueID,
+    pk: taskId,
     status: 'pending',
     llm: 'gemini',
     llmModel: 'gemini-2.5-pro',
@@ -64,7 +75,7 @@ const createPendingTask = (issueID: string): IssueTask => {
     updatedAt: createdAt,
     processingMode: 'single_chunk',
     prompt_version: '1.0',
-    prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${issueID}_reduce.json`,
+    prompt_url: `s3://${DEFAULT_PROMPT_BUCKET}/prompts/${taskId}_reduce.json`,
     meeting: {
       issueID,
       nameOfMeeting: 'Test Meeting',
@@ -73,10 +84,10 @@ const createPendingTask = (issueID: string): IssueTask => {
       numberOfSpeeches: 1,
       session: 208,
     },
-    result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${issueID}_reduce.json`,
+    result_url: `s3://${DEFAULT_PROMPT_BUCKET}/results/${taskId}_reduce.json`,
     chunks: [],
     attachedAssets: {
-      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${issueID}.json`,
+      speakerMetadataUrl: `s3://${DEFAULT_PROMPT_BUCKET}/attachedAssets/${taskId}.json`,
     },
   };
 };
@@ -117,11 +128,11 @@ describe('TaskRepository LocalStack integration', () => {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    async function waitForTask(issueID: string, opts: { attempts?: number; delayMs?: number } = {}): Promise<IssueTask | undefined> {
+    async function waitForTask(taskId: string, opts: { attempts?: number; delayMs?: number } = {}): Promise<IssueTask | undefined> {
       const attempts = opts.attempts ?? 20;
       const delayMs = opts.delayMs ?? 100;
       for (let i = 0; i < attempts; i += 1) {
-        const task = await repository.getTask(issueID);
+        const task = await repository.getTask(taskId);
         if (task) {
           return task;
         }
@@ -141,7 +152,12 @@ describe('TaskRepository LocalStack integration', () => {
       const issueID = `TEST-INGEST-${Date.now()}`;
       await repository.createTask(createIngestedTask(issueID));
 
-      const stored = await waitForTask(issueID);
+      const taskId = buildIssueUid({
+        issueID,
+        session: 208,
+        nameOfHouse: 'House',
+      });
+      const stored = await waitForTask(taskId);
       expect(stored?.status).toBe('ingested');
       expect(typeof stored?.raw_url).toBe('string');
     }, 20000);
@@ -157,7 +173,12 @@ describe('TaskRepository LocalStack integration', () => {
       const issueID = `TEST-SUCCEED-${Date.now()}`;
       await repository.createTask(createPendingTask(issueID));
 
-      const result = await repository.markTaskSucceeded(issueID);
+      const taskId = buildIssueUid({
+        issueID,
+        session: 208,
+        nameOfHouse: 'House',
+      });
+      const result = await repository.markTaskSucceeded(taskId);
       expect(result?.status).toBe('completed');
     }, 20000);
   });

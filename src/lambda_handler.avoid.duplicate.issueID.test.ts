@@ -17,13 +17,14 @@ import type { RawSpeechRecord } from '@NationalDietAPI/Raw';
 
 import { applyLambdaTestEnv, applyLocalstackEnv, getLocalstackConfig, DEFAULT_PROMPT_BUCKET, DEFAULT_LLM_TASK_TABLE } from './testUtils/testEnv';
 import { appConfig } from './config';
+import { buildIssueUid } from './utils/uid';
 
 /*
- * skips creation when issueID already exists in LocalStack DynamoDB
- * [Contract] Handler must short-circuit and avoid writing duplicates if a task with the same issueID already exists.
+ * skips creation when a task with the same meeting-derived UID already exists in LocalStack DynamoDB
+ * [Contract] Handler must short-circuit and avoid writing duplicates if a task with the same (session + house + issueID) exists.
  * [Reason] Idempotency is required for reruns/replays to prevent duplicate work.
  * [Accident] Without this, repeated runs would enqueue duplicates and double processing.
- * [Odd] Pre-seeds Dynamo with a pending pk `MTG-DUP-...` and reruns handler with mocked ND API.
+ * [Odd] Pre-seeds Dynamo with a pending pk derived from the meeting and reruns handler with mocked ND API.
  * [History] Regression cover for prior duplicate-task behavior in LocalStack runs (no ticket).
  */
 
@@ -130,24 +131,29 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
     });
 
     /*
-     Contract: if a task already exists for an issueID, the handler must short-circuit and avoid writing duplicates; failure means idempotency guard is broken.
+     Contract: if a task already exists for the same meeting UID, the handler must short-circuit and avoid writing duplicates; failure means idempotency guard is broken.
      Reason: operational rule—reruns should not enqueue duplicate work for the same meeting.
      Accident without this: repeated runs could spam DynamoDB and trigger duplicate processing downstream.
      Odd values: pre-seeding DynamoDB with an existing pk simulates replay conditions.
      Bug history: regression test for prior duplicate task writes in LocalStack runs (no tracked ticket).
     */
     test(
-      'skips creation when issueID already exists in LocalStack DynamoDB',
+      'skips creation when meeting UID already exists in LocalStack DynamoDB',
       async () => {
         const issueID = `MTG-DUP-${Date.now()}`;
+        const taskId = buildIssueUid({
+          issueID,
+          session: 208,
+          nameOfHouse: 'House of Representatives',
+        });
         const createdAt = new Date().toISOString();
         const seededTask = {
-          pk: issueID,
+          pk: taskId,
           status: 'ingested',
           retryAttempts: 0,
           createdAt,
           updatedAt: createdAt,
-          raw_url: `s3://${bucketName}/raw/${issueID}.json`,
+          raw_url: `s3://${bucketName}/raw/${taskId}.json`,
           raw_hash: 'seed',
           meeting: {
             issueID,
@@ -158,11 +164,11 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
             session: 208,
           },
           attachedAssets: {
-            speakerMetadataUrl: `s3://${bucketName}/attachedAssets/${issueID}.json`,
+            speakerMetadataUrl: `s3://${bucketName}/attachedAssets/${taskId}.json`,
           },
         };
         await docClient.send(new PutCommand({ TableName: tableName, Item: seededTask }));
-        insertedTasks.push(issueID);
+        insertedTasks.push(taskId);
 
         const dietResponse = {
           numberOfRecords: 1,
@@ -235,7 +241,7 @@ describe('lambda_handler duplicate issueID guard (LocalStack)', () => {
           expect(response.statusCode).toBe(200);
         });
 
-        const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: issueID } }));
+        const stored = await docClient.send(new GetCommand({ TableName: tableName, Key: { pk: taskId } }));
         expect(stored.Item?.createdAt).toBe(createdAt);
         const updatedAt = new Date(stored.Item?.updatedAt as string).getTime();
         expect(stored.Item?.status).toBe('ingested');

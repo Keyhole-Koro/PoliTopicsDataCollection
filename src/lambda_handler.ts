@@ -14,6 +14,7 @@ import { resJson, isApiResponse } from './lambda/httpResponses';
 import { fetchMeetingsForRange } from './lambda/meetings';
 import { resolveRunRange } from './lambda/rangeResolver';
 import { TaskRepository, type AttachedAssets, type IssueTask } from '@DynamoDB/tasks';
+import { buildIssueUid } from '@utils/uid';
 import {
   notifyRunError,
   notifyTaskWriteFailure,
@@ -77,7 +78,13 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         continue;
       }
 
-      const existingTask = await taskRepo.getTask(meetingIssueID);
+      const taskId = buildIssueUid({
+        issueID: meetingIssueID,
+        session: meeting.session,
+        nameOfHouse: meeting.nameOfHouse,
+      });
+
+      const existingTask = await taskRepo.getTask(taskId);
       if (existingTask) {
         console.log(`[Meeting ${meetingIssueID}] Task already exists in DynamoDB; skipping creation.`);
         summary.existingCount += 1;
@@ -96,7 +103,7 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
       };
 
       const rawPayload = buildRawPayload(meeting, createdAt);
-      const rawKey = `raw/${meetingIssueID}.json`;
+      const rawKey = `raw/${taskId}.json`;
       await putJsonS3({ s3, bucket: RAW_BUCKET, key: rawKey, body: rawPayload });
       const rawHash = hashPayload(rawPayload);
 
@@ -104,12 +111,13 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
         s3,
         bucket: RAW_BUCKET,
         issueID: meetingIssueID,
+        taskId,
         speeches: meeting.speechRecord,
         createdAt,
       });
 
       const issueTask: IssueTask = {
-        pk: meetingIssueID,
+        pk: taskId,
         status: 'ingested',
         retryAttempts: 0,
         createdAt,
@@ -205,18 +213,19 @@ function buildSpeakerAttachments(speeches: RawSpeechRecord[]): SpeakerAttachment
 async function writeAttachedAssets(args: {
   s3: S3Client;
   bucket: string;
+  taskId: string;
   issueID: string;
   speeches: RawSpeechRecord[];
   createdAt: string;
 }): Promise<AttachedAssets> {
-  const { s3, bucket, issueID, speeches, createdAt } = args;
+  const { s3, bucket, taskId, issueID, speeches, createdAt } = args;
   const payload: AttachedAssetsPayload = {
     issueID,
     generatedAt: createdAt,
     speeches: buildSpeakerAttachments(speeches),
   };
 
-  const key = `attachedAssets/${issueID}.json`;
+  const key = `attachedAssets/${taskId}.json`;
   try {
     await putJsonS3({
       s3,
