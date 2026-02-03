@@ -237,3 +237,11 @@ Files changed:
 - Fixed cooldown to a constant 5-second interval regardless of split depth.
 - Files changed:
   - `PoliTopicsDataCollection/src/lambda/meetings.ts`
+
+### Changes After Review
+- Set DataCollection Lambda timeout to 15 minutes (900s) across env tfvars.
+- Files changed:
+  - `PoliTopicsDataCollection/terraform/tfvars/localstack.tfvars`
+  - `PoliTopicsDataCollection/terraform/tfvars/stage.tfvars`
+  - `PoliTopicsDataCollection/terraform/tfvars/prod.tfvars`
+  - `PoliTopicsDataCollection/terraform/tfvars/ghaTest.tfvars`
