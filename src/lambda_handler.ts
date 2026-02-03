@@ -51,7 +51,11 @@ export const handler: Handler = async (event: APIGatewayProxyEventV2 | Scheduled
   };
 
   try {
-    const { meetings, recordCount } = await fetchMeetingsForRange(nationalDietApiEndpoint, range);
+    const { meetings, recordCount } = await fetchMeetingsForRange(nationalDietApiEndpoint, range, {
+      maxRecords: appConfig.nationalDietApi.maxRecords,
+      chunkDays: appConfig.nationalDietApi.rangeChunkDays,
+      intervalMs: appConfig.nationalDietApi.requestIntervalMs,
+    });
     console.log(`[DataCollection] Fetched ${meetings.length} meetings (total records: ${recordCount})`);
 
     if (!recordCount || !meetings.length) {

@@ -1,8 +1,37 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { parseYmdOrNull } from './http';
-import { dateStrJST } from './date';
+import { addDays, dateStrJST } from './date';
 
 export type RunRange = { from: string; until: string };
+
+function parseRangeDate(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function splitRangeByDays(range: RunRange, chunkDays: number): RunRange[] {
+  const days = Math.max(1, Math.floor(chunkDays));
+  const start = parseRangeDate(range.from);
+  const end = parseRangeDate(range.until);
+  if (!start || !end || start.getTime() > end.getTime()) {
+    return [range];
+  }
+
+  const ranges: RunRange[] = [];
+  let cursor = start;
+  while (cursor.getTime() <= end.getTime()) {
+    const segmentEnd = addDays(cursor, days - 1);
+    const actualEnd = segmentEnd.getTime() > end.getTime() ? end : segmentEnd;
+    ranges.push({
+      from: dateStrJST(0, cursor),
+      until: dateStrJST(0, actualEnd),
+    });
+    cursor = addDays(actualEnd, 1);
+  }
+
+  return ranges;
+}
 
 export function deriveRangeFromHttp(event: APIGatewayProxyEventV2): RunRange | null {
   const method = event.requestContext.http.method;
@@ -37,4 +66,3 @@ export function defaultCronRange(): RunRange {
   const until = dateStrJST(0);
   return { from, until };
 }
-

@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
-import { defaultCronRange, deriveRangeFromHttp } from './range';
+import { defaultCronRange, deriveRangeFromHttp, splitRangeByDays } from './range';
 import { dateStrJST } from './date';
 
 describe('range utils', () => {
@@ -64,6 +64,22 @@ describe('range utils', () => {
       const event = createEvent('POST', undefined, '{}');
       const range = deriveRangeFromHttp(event);
       expect(range).toEqual({ from: TODAY, until: TODAY });
+    });
+  });
+
+  describe('splitRangeByDays', () => {
+    it('splits multi-week ranges into 7-day windows', () => {
+      const segments = splitRangeByDays({ from: '2025-01-01', until: '2025-01-15' }, 7);
+      expect(segments).toEqual([
+        { from: '2025-01-01', until: '2025-01-07' },
+        { from: '2025-01-08', until: '2025-01-14' },
+        { from: '2025-01-15', until: '2025-01-15' },
+      ]);
+    });
+
+    it('returns the original range for invalid dates', () => {
+      const segments = splitRangeByDays({ from: 'invalid', until: '2025-01-01' }, 7);
+      expect(segments).toEqual([{ from: 'invalid', until: '2025-01-01' }]);
     });
   });
 });

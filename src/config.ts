@@ -13,6 +13,11 @@ export type AppConfig = {
   promptBucket: string
   llmTaskTable: string
   nationalDietApiEndpoint: string
+  nationalDietApi: {
+    maxRecords: number
+    rangeChunkDays: number
+    requestIntervalMs: number
+  }
   runApiKey: string
   localRunRange?: { from: string; until: string }
   cache: {
@@ -58,6 +63,7 @@ export function updateAppConfig(overrides: Partial<AppConfig>) {
     ...overrides,
     aws: { ...appConfig.aws, ...overrides.aws },
     cache: { ...appConfig.cache, ...overrides.cache },
+    nationalDietApi: { ...appConfig.nationalDietApi, ...overrides.nationalDietApi },
   }
 }
 
@@ -81,6 +87,11 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     promptBucket: "politopics-llm-artifacts-local",
     llmTaskTable: "politopics-llm-tasks-local",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
+    nationalDietApi: {
+      maxRecords: 10,
+      rangeChunkDays: 7,
+      requestIntervalMs: 15000,
+    },
     runApiKey: requireEnv("RUN_API_KEY"),
     localRunRange: { from: "2025-09-01", until: "2025-09-30" },
     cache: {},
@@ -100,6 +111,11 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     promptBucket: "politopics-llm-artifacts-stage",
     llmTaskTable: "politopics-llm-tasks-stage",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
+    nationalDietApi: {
+      maxRecords: 10,
+      rangeChunkDays: 7,
+      requestIntervalMs: 15000,
+    },
     runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
     notifications: {
@@ -118,6 +134,11 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     promptBucket: "politopics-llm-artifacts-prod",
     llmTaskTable: "politopics-llm-tasks-prod",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
+    nationalDietApi: {
+      maxRecords: 10,
+      rangeChunkDays: 7,
+      requestIntervalMs: 15000,
+    },
     runApiKey: requireEnv("RUN_API_KEY"),
     cache: {},
     notifications: {
@@ -140,6 +161,11 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     promptBucket: "politopics-llm-artifacts-local",
     llmTaskTable: "politopics-llm-tasks-local",
     nationalDietApiEndpoint: "https://kokkai.ndl.go.jp/api/meeting",
+    nationalDietApi: {
+      maxRecords: 10,
+      rangeChunkDays: 7,
+      requestIntervalMs: 0,
+    },
     runApiKey: optionalEnv("RUN_API_KEY"),
     cache: {},
     notifications: {

@@ -25,6 +25,7 @@ flowchart LR
 
 Notes
 - Scheduler queries from 21 days ago to today because the Diet API publishes with a short lag after meetings.
+- When a range is requested (cron/HTTP), the service splits it into 7-day windows, requests `maximumRecords=10`, and waits ~15s between National Diet API calls.
 - Raw payloads live in S3; task metadata in DynamoDB; Discord webhooks for error/warn/batch.
 - Local-first via LocalStack; same Lambda bundle deploys to stage/prod.
 

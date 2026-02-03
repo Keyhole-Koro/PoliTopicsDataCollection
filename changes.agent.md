@@ -197,3 +197,31 @@ Details:
 Files changed:
 - `PoliTopicsDataCollection/src/lambda_handler.avoid.duplicate.issueID.test.ts`
 - `PoliTopicsDataCollection/src/lambda_handler.mock.test.ts`
+
+Agent: Codex
+Date/Time: 2026-02-03 16:02 JST
+Keywords: ndl-api, range, throttling, config
+Topic: Chunk ND API requests weekly with pacing and maxRecords
+Details:
+- Added ND API request settings (maxRecords=10, 7-day chunks, 15s interval) and wired them into range fetches.
+- Split cron/HTTP ranges into 7-day windows, pausing between calls, and updated range utilities/tests.
+- Documented the weekly chunking and request pacing in the DataCollection README (EN/JP).
+Files changed:
+- `PoliTopicsDataCollection/src/config.ts`
+- `PoliTopicsDataCollection/src/NationalDietAPI/NationalDietAPI.ts`
+- `PoliTopicsDataCollection/src/utils/range.ts`
+- `PoliTopicsDataCollection/src/utils/range.test.ts`
+- `PoliTopicsDataCollection/src/lambda/meetings.ts`
+- `PoliTopicsDataCollection/src/lambda_handler.ts`
+- `PoliTopicsDataCollection/readme.md`
+- `PoliTopicsDataCollection/jp/readme.md`
+
+Agent: Codex
+Date/Time: 2026-02-03 16:11 JST
+Keywords: ndl-api, pagination, split, cooldown
+Topic: Split further when ND API returns partial results
+Details:
+- When numberOfRecords exceeds numberOfReturn, the range is split further (or paged by startRecord for single-day ranges).
+- Cooldown grows with split depth, while still respecting the base interval.
+Files changed:
+- `PoliTopicsDataCollection/src/lambda/meetings.ts`

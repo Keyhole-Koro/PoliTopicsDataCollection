@@ -124,6 +124,7 @@ async function fetchNationalDietRecords(
     from,
     until,
     recordPacking: 'json',
+    maximumRecords: '10',
     ...otherParams,
   });
 
