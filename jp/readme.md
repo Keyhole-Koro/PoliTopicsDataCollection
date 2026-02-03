@@ -11,7 +11,7 @@ flowchart LR
   subgraph DC[PoliTopicsDataCollection / 収集サービス]
     IngestSchedule["EventBridge (Cron)<br/>取得スケジュール"]
     IngestLambda["AWS Lambda (Node.js)<br/>IngestLambda"]
-    PromptBucket[(Amazon S3<br/>RawPayloadBucket)]
+    ArtifactBucket[(Amazon S3<br/>LLMArtifactsBucket<br/>raw + attached assets)]
     TaskTable[(DynamoDB<br/>TaskTable: llm_task_table)]
   end
 
@@ -19,8 +19,8 @@ flowchart LR
 
   IngestSchedule -->|トリガー| IngestLambda
   IngestLambda -->|会議録を取得| NationalDietAPI
-  IngestLambda -->|raw payload を保存| PromptBucket
-  IngestLambda -->|ingested タスクを登録| TaskTable
+  IngestLambda -->|raw payload + assets を保存| ArtifactBucket
+  IngestLambda -->|ingested タスクを登録 (raw_url/raw_hash)| TaskTable
 ```
 
 メモ

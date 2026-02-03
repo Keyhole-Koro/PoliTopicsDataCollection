@@ -11,7 +11,7 @@ flowchart LR
   subgraph DC[PoliTopicsDataCollection / Ingestion Service]
     IngestSchedule["EventBridge (Cron)<br/>IngestSchedule"]
     IngestLambda["AWS Lambda (Node.js)<br/>IngestLambda"]
-    PromptBucket[(Amazon S3<br/>RawPayloadBucket)]
+    ArtifactBucket[(Amazon S3<br/>LLMArtifactsBucket<br/>raw + attached assets)]
     TaskTable[(DynamoDB<br/>TaskTable: llm_task_table)]
   end
 
@@ -19,8 +19,8 @@ flowchart LR
 
   IngestSchedule -->|Triggers| IngestLambda
   IngestLambda -->|Fetches Data| NationalDietAPI
-  IngestLambda -->|Stores Raw Payload| PromptBucket
-  IngestLambda -->|Enqueues Ingested Task| TaskTable
+  IngestLambda -->|Stores Raw Payload + Assets| ArtifactBucket
+  IngestLambda -->|Registers ingested task (raw_url/raw_hash)| TaskTable
 ```
 
 Notes

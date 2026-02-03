@@ -176,14 +176,18 @@ run_import() {
     import_output="$(terraform import -var-file="$VAR_FILE" -no-color "$address" "$identifier" 2>&1)"
     import_status=$?
     set -e
-    if [[ $import_status -ne 0 ]]; then
-      if echo "$import_output" | grep -q "Cannot import non-existent remote object"; then
-        echo "skip   -> $address (missing remote object)" >&2
-        return
-      fi
-      if echo "$import_output" | grep -q "Configuration for import target does not exist"; then
-        echo "skip   -> $address (missing configuration)" >&2
-        return
+  if [[ $import_status -ne 0 ]]; then
+    if echo "$import_output" | grep -q "Cannot import non-existent remote object"; then
+      echo "skip   -> $address (missing remote object)" >&2
+      return
+    fi
+    if echo "$import_output" | grep -q "BucketAlreadyOwnedByYou"; then
+      echo "skip   -> $address (bucket already owned; import not required)" >&2
+      return
+    fi
+    if echo "$import_output" | grep -q "Configuration for import target does not exist"; then
+      echo "skip   -> $address (missing configuration)" >&2
+      return
       fi
       if echo "$import_output" | grep -q "couldn't find resource"; then
         echo "skip   -> $address (missing resource)" >&2
